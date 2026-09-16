@@ -44,13 +44,19 @@ export const ScheduleTournamentPage: React.FC = () => {
     // Initial fetch
     syncTournaments();
 
-    // Auto-poll every 2.5 seconds for instant real-time 2-device sync
-    const intervalId = setInterval(syncTournaments, 2500);
+    // BroadcastChannel local multi-tab listener
+    cloudSyncService.onBroadcastUpdate((items) => {
+      setScheduledTournaments(items);
+    });
+
+    // Auto-poll every 2.0 seconds for instant 2-device remote sync (Abuja <-> Lagos)
+    const intervalId = setInterval(syncTournaments, 2000);
 
     return () => {
       clearInterval(intervalId);
     };
   }, [setScheduledTournaments]);
+
 
   const [title, setTitle] = useState('2026 NACETEM Inter-Departmental Championship');
   const [competitionMode, setCompMode] = useState<'intra_dept' | 'inter_agency'>('intra_dept');
