@@ -7,7 +7,7 @@ export const Navbar: React.FC = () => {
 
   const essentialNavItems: { id: ActivePage; label: string; icon: React.ReactNode }[] = [
     { id: 'tournaments', label: 'Tournament Hub', icon: <Trophy className="w-4 h-4" /> },
-    { id: 'schedule', label: 'Schedule Tournament', icon: <Calendar className="w-4 h-4" /> },
+    { id: 'schedule', label: 'Scheduled Tournaments', icon: <Calendar className="w-4 h-4" /> },
     { id: 'practice', label: 'Practice (958 Qs)', icon: <BookOpen className="w-4 h-4" /> },
     { id: 'leaderboard', label: 'Leaderboards', icon: <BarChart3 className="w-4 h-4" /> },
     { id: 'admin', label: 'Admin Portal', icon: <ShieldAlert className="w-4 h-4" /> },
