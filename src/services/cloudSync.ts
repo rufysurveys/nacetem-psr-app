@@ -1,18 +1,21 @@
 import { ScheduledTournamentItem } from '../store/useStore';
 
-// Permanent GitHub Cloud Database for NACETEM Gamification App (24/7 Global Sync)
-const GIST_ID = '282f0e0c8f4d21c3fd3dc5a244de8fe2';
-const T_PART_A = 'gho_YJOJZpH';
-const T_PART_B = 'yu4JcVnOq6KoQQ';
-const T_PART_C = '1mtivkxIh2ltHEN';
-const GIST_TOKEN = T_PART_A + T_PART_B + T_PART_C;
+// Serverless API Sync Endpoint (handles CORS & GitHub Gist server-side)
+const GET_API_URL = () => {
+  if (typeof window !== 'undefined') {
+    const origin = window.location.origin;
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return 'https://nacetem-psr-app.vercel.app/api/sync';
+    }
+    return `${origin}/api/sync`;
+  }
+  return 'https://nacetem-psr-app.vercel.app/api/sync';
+};
 
-const GIST_API_URL = `https://api.github.com/gists/${GIST_ID}`;
-const LOCAL_STORAGE_KEY = 'nacetem_psr_scheduled_tournaments_v3';
+const LOCAL_STORAGE_KEY = 'nacetem_psr_scheduled_tournaments_v4';
 
-// Multi-tab channel for instant local sync
 const broadcastChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
-  ? new BroadcastChannel('nacetem_psr_tournament_sync_v3')
+  ? new BroadcastChannel('nacetem_psr_tournament_sync_v4')
   : null;
 
 export const cloudSyncService = {
@@ -49,26 +52,19 @@ export const cloudSyncService = {
     };
   },
 
-  // Fetch tournaments globally across devices (Abuja, Lagos, etc.)
+  // Fetch all tournaments globally across devices (Abuja, Lagos, etc.)
   async fetchCloudTournaments(): Promise<ScheduledTournamentItem[] | null> {
     try {
-      const res = await fetch(`${GIST_API_URL}?t=${Date.now()}`, {
-        headers: {
-          'Authorization': `token ${GIST_TOKEN}`,
-          'Accept': 'application/vnd.github.v3+json'
-        },
-        cache: 'no-store'
-      });
+      const endpoint = GET_API_URL();
+      const res = await fetch(`${endpoint}?t=${Date.now()}`, { cache: 'no-store' });
       if (!res.ok) return null;
       const json = await res.json();
-      const contentStr = json?.files?.['gist_db.json']?.content;
-      if (contentStr) {
-        const parsed = JSON.parse(contentStr);
-        if (Array.isArray(parsed)) return parsed;
+      if (json && Array.isArray(json.items)) {
+        return json.items;
       }
       return null;
     } catch (err) {
-      console.warn('Gist Cloud Fetch Error:', err);
+      console.warn('Serverless API Fetch Error:', err);
       return null;
     }
   },
@@ -80,24 +76,15 @@ export const cloudSyncService = {
       const filtered = existing.filter(i => i.id !== newItem.id);
       const updatedList = [newItem, ...filtered];
 
-      const res = await fetch(GIST_API_URL, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `token ${GIST_TOKEN}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/vnd.github.v3+json'
-        },
-        body: JSON.stringify({
-          files: {
-            'gist_db.json': {
-              content: JSON.stringify(updatedList, null, 2)
-            }
-          }
-        })
+      const endpoint = GET_API_URL();
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: updatedList })
       });
       return res.ok;
     } catch (err) {
-      console.warn('Gist Cloud Publish Error:', err);
+      console.warn('Serverless API Publish Error:', err);
       return false;
     }
   },
@@ -118,24 +105,15 @@ export const cloudSyncService = {
         updatedList.unshift(updatedTournament);
       }
 
-      const res = await fetch(GIST_API_URL, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `token ${GIST_TOKEN}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/vnd.github.v3+json'
-        },
-        body: JSON.stringify({
-          files: {
-            'gist_db.json': {
-              content: JSON.stringify(updatedList, null, 2)
-            }
-          }
-        })
+      const endpoint = GET_API_URL();
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: updatedList })
       });
       return res.ok;
     } catch (err) {
-      console.warn('Gist Cloud Subscription Update Error:', err);
+      console.warn('Serverless API Subscription Update Error:', err);
       return false;
     }
   }
