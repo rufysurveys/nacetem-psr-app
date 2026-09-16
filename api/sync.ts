@@ -1,3 +1,5 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+
 const GIST_ID = '282f0e0c8f4d21c3fd3dc5a244de8fe2';
 const T1 = 'gho_YJOJZpH';
 const T2 = 'yu4JcVnOq6KoQQ';
@@ -5,8 +7,8 @@ const T3 = '1mtivkxIh2ltHEN';
 const GIST_TOKEN = T1 + T2 + T3;
 const GIST_API_URL = `https://api.github.com/gists/${GIST_ID}`;
 
-export default async function handler(req: any, res: any) {
-  // Enable full CORS for any domain/device
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  // Set CORS headers so any client device (phone, laptop, tablet) can access seamlessly
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,POST,PUT,DELETE');
@@ -16,11 +18,10 @@ export default async function handler(req: any, res: any) {
   );
 
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
 
-  // GET: Retrieve all scheduled tournaments from GitHub Gist server-side
+  // GET: Fetch scheduled tournaments from GitHub Gist
   if (req.method === 'GET') {
     try {
       const response = await fetch(`${GIST_API_URL}?t=${Date.now()}`, {
@@ -42,15 +43,17 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  // POST / PUT: Update scheduled tournaments list server-side
+  // POST / PUT: Update scheduled tournaments list in GitHub Gist
   if (req.method === 'POST' || req.method === 'PUT') {
     try {
       let bodyData = req.body;
       if (typeof bodyData === 'string') {
-        bodyData = JSON.parse(bodyData);
+        try {
+          bodyData = JSON.parse(bodyData);
+        } catch (e) {}
       }
-      
-      const items = bodyData?.items || bodyData;
+
+      const items = bodyData?.items || (Array.isArray(bodyData) ? bodyData : null);
       if (!Array.isArray(items)) {
         return res.status(400).json({ error: 'items must be an array' });
       }

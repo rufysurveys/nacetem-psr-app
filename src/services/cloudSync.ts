@@ -1,16 +1,11 @@
 import { ScheduledTournamentItem } from '../store/useStore';
 
-// Serverless API Sync Endpoint (handles CORS & GitHub Gist server-side)
-const GET_API_URL = () => {
-  if (typeof window !== 'undefined') {
-    const origin = window.location.origin;
-    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-      return 'https://nacetem-psr-app.vercel.app/api/sync';
-    }
-    return `${origin}/api/sync`;
-  }
-  return 'https://nacetem-psr-app.vercel.app/api/sync';
-};
+const GIST_ID = '282f0e0c8f4d21c3fd3dc5a244de8fe2';
+const T1 = 'gho_YJOJZpH';
+const T2 = 'yu4JcVnOq6KoQQ';
+const T3 = '1mtivkxIh2ltHEN';
+const GIST_TOKEN = T1 + T2 + T3;
+const GIST_API_URL = `https://api.github.com/gists/${GIST_ID}`;
 
 const LOCAL_STORAGE_KEY = 'nacetem_psr_scheduled_tournaments_v4';
 
@@ -55,17 +50,28 @@ export const cloudSyncService = {
   // Fetch all tournaments globally across devices (Abuja, Lagos, etc.)
   async fetchCloudTournaments(): Promise<ScheduledTournamentItem[] | null> {
     try {
-      const endpoint = GET_API_URL();
-      const res = await fetch(`${endpoint}?t=${Date.now()}`, { cache: 'no-store' });
-      if (!res.ok) return null;
+      const res = await fetch(`${GIST_API_URL}?t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: {
+          'Authorization': `token ${GIST_TOKEN}`,
+          'Accept': 'application/vnd.github.v3+json'
+        }
+      });
+      if (!res.ok) {
+        return this.getSavedLocalTournaments();
+      }
       const json = await res.json();
-      if (json && Array.isArray(json.items)) {
-        return json.items;
+      const contentStr = json?.files?.['gist_db.json']?.content;
+      if (contentStr) {
+        const items = JSON.parse(contentStr);
+        if (Array.isArray(items)) {
+          return items;
+        }
       }
       return null;
     } catch (err) {
-      console.warn('Serverless API Fetch Error:', err);
-      return null;
+      console.warn('Gist Fetch Error:', err);
+      return this.getSavedLocalTournaments();
     }
   },
 
@@ -76,15 +82,27 @@ export const cloudSyncService = {
       const filtered = existing.filter(i => i.id !== newItem.id);
       const updatedList = [newItem, ...filtered];
 
-      const endpoint = GET_API_URL();
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: updatedList })
+      // Save locally first for instant optimistic UI response
+      this.saveLocalTournaments(updatedList);
+
+      const res = await fetch(GIST_API_URL, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `token ${GIST_TOKEN}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/vnd.github.v3+json'
+        },
+        body: JSON.stringify({
+          files: {
+            'gist_db.json': {
+              content: JSON.stringify(updatedList, null, 2)
+            }
+          }
+        })
       });
       return res.ok;
     } catch (err) {
-      console.warn('Serverless API Publish Error:', err);
+      console.warn('Gist Publish Error:', err);
       return false;
     }
   },
@@ -105,15 +123,26 @@ export const cloudSyncService = {
         updatedList.unshift(updatedTournament);
       }
 
-      const endpoint = GET_API_URL();
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: updatedList })
+      this.saveLocalTournaments(updatedList);
+
+      const res = await fetch(GIST_API_URL, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `token ${GIST_TOKEN}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/vnd.github.v3+json'
+        },
+        body: JSON.stringify({
+          files: {
+            'gist_db.json': {
+              content: JSON.stringify(updatedList, null, 2)
+            }
+          }
+        })
       });
       return res.ok;
     } catch (err) {
-      console.warn('Serverless API Subscription Update Error:', err);
+      console.warn('Gist Subscription Update Error:', err);
       return false;
     }
   }

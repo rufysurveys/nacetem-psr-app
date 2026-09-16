@@ -1,5 +1,6 @@
-import React from 'react';
-import { useStore } from './store/useStore';
+import React, { useEffect } from 'react';
+import { useStore, ScheduledTournamentItem } from './store/useStore';
+import { cloudSyncService } from './services/cloudSync';
 import { Navbar } from './components/Navbar';
 import { AuthPage } from './pages/AuthPage';
 import { TournamentHub } from './pages/TournamentHub';
@@ -15,7 +16,44 @@ import { RemoteMatchRoom } from './components/quiz/RemoteMatchRoom';
 import { Shield } from 'lucide-react';
 
 export const App: React.FC = () => {
-  const { user, activePage } = useStore();
+  const { user, activePage, setScheduledTournaments } = useStore();
+
+  // Continuous global background cloud sync across all devices (Abuja <-> Lagos)
+  useEffect(() => {
+    const syncTournaments = async () => {
+      const remoteList = await cloudSyncService.fetchCloudTournaments();
+      if (remoteList && remoteList.length > 0) {
+        const currentList = useStore.getState().scheduledTournaments;
+        const mergedMap = new Map<string, ScheduledTournamentItem>();
+
+        currentList.forEach(item => mergedMap.set(item.id, item));
+        remoteList.forEach(item => {
+          const existing = mergedMap.get(item.id);
+          if (existing) {
+            mergedMap.set(item.id, {
+              ...item,
+              isSubscribed: existing.isSubscribed || item.isSubscribed,
+              registeredCount: Math.max(existing.registeredCount, item.registeredCount)
+            });
+          } else {
+            mergedMap.set(item.id, item);
+          }
+        });
+
+        const sortedMerged = Array.from(mergedMap.values());
+        setScheduledTournaments(sortedMerged);
+      }
+    };
+
+    syncTournaments();
+
+    cloudSyncService.onBroadcastUpdate((items) => {
+      setScheduledTournaments(items);
+    });
+
+    const intervalId = setInterval(syncTournaments, 2000);
+    return () => clearInterval(intervalId);
+  }, [setScheduledTournaments]);
 
   // FIRST POINT OF CONTACT: Sign Up / Sign In Page if unauthenticated
   if (!user) {
