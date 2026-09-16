@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { UserProfile, Question, Tournament, LeaderboardEntry, AntiCheatLog, MDA, ChapterAnalytics, QuizAttempt, CompetitionMode } from '../types';
 import { INITIAL_USER, INITIAL_QUESTIONS, INITIAL_TOURNAMENTS, INITIAL_LEADERBOARD, INITIAL_ANTI_CHEAT_LOGS, INITIAL_MDAS, INITIAL_CHAPTER_ANALYTICS } from '../data/mockData';
+import { cloudSyncService } from '../services/cloudSync';
 
 export type ActivePage = 'tournaments' | 'schedule' | 'remotematch' | 'quiz' | 'knockout' | 'sjt' | 'practice' | 'leaderboard' | 'profile' | 'admin';
 export type ExtendedCompMode = 'intra_dept' | 'inter_agency';
@@ -61,6 +62,7 @@ interface AppState {
   addTournament: (tournament: Tournament) => void;
   addScheduledTournament: (item: ScheduledTournamentItem) => void;
   subscribeToTournament: (id: string) => void;
+  setScheduledTournaments: (items: ScheduledTournamentItem[]) => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -274,13 +276,32 @@ export const useStore = create<AppState>((set, get) => ({
     activeTournament: tournament
   })),
 
-  addScheduledTournament: (item) => set(state => ({
-    scheduledTournaments: [item, ...state.scheduledTournaments]
-  })),
+  addScheduledTournament: (item) => {
+    const updated = [item, ...get().scheduledTournaments];
+    set({ scheduledTournaments: updated });
+    cloudSyncService.saveLocalTournaments(updated);
+    cloudSyncService.publishScheduledTournament(item);
+  },
 
-  subscribeToTournament: (id) => set(state => ({
-    scheduledTournaments: state.scheduledTournaments.map(t => 
-      t.id === id ? { ...t, isSubscribed: true, registeredCount: t.registeredCount + 1 } : t
-    )
-  }))
+  subscribeToTournament: (id) => {
+    let targetItem: ScheduledTournamentItem | null = null;
+    const updated = get().scheduledTournaments.map(t => {
+      if (t.id === id) {
+        targetItem = { ...t, isSubscribed: true, registeredCount: t.registeredCount + 1 };
+        return targetItem;
+      }
+      return t;
+    });
+    set({ scheduledTournaments: updated });
+    cloudSyncService.saveLocalTournaments(updated);
+    if (targetItem) {
+      cloudSyncService.updateSubscriptionInCloud(id, targetItem);
+    }
+  },
+
+  setScheduledTournaments: (items) => {
+    set({ scheduledTournaments: items });
+    cloudSyncService.saveLocalTournaments(items);
+  }
 }));
+

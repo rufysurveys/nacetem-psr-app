@@ -1,11 +1,61 @@
-import React, { useState } from 'react';
-import { useStore } from '../store/useStore';
-import { Calendar, Clock, Trophy, Users, CheckCircle2, Plus, Globe, Building2, Sparkles, Award, Swords } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useStore, ScheduledTournamentItem } from '../store/useStore';
+import { cloudSyncService } from '../services/cloudSync';
+import { Calendar, Clock, Trophy, Users, CheckCircle2, Plus, Globe, Building2, Sparkles, Award, Swords, RefreshCw } from 'lucide-react';
 
 export const ScheduleTournamentPage: React.FC = () => {
-  const { user, scheduledTournaments, addScheduledTournament, subscribeToTournament, setActivePage, startTournamentStage } = useStore();
+  const { user, scheduledTournaments, addScheduledTournament, subscribeToTournament, setScheduledTournaments, setActivePage } = useStore();
 
+  const [isSyncing, setIsSyncing] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // Real-time Cloud Sync across devices
+  useEffect(() => {
+    let isMounted = true;
+
+    const syncTournaments = async () => {
+      setIsSyncing(true);
+      const remoteList = await cloudSyncService.fetchCloudTournaments();
+      if (isMounted && remoteList && remoteList.length > 0) {
+        // Merge remote tournaments with local state
+        const currentList = useStore.getState().scheduledTournaments;
+        const mergedMap = new Map<string, ScheduledTournamentItem>();
+        
+        // Add existing preset/local items
+        currentList.forEach(item => mergedMap.set(item.id, item));
+        // Merge cloud items (overwrite or add new)
+        remoteList.forEach(item => {
+          const existing = mergedMap.get(item.id);
+          if (existing) {
+            // Preserve user's local subscription state if subscribed locally
+            mergedMap.set(item.id, {
+              ...item,
+              isSubscribed: existing.isSubscribed || item.isSubscribed,
+              registeredCount: Math.max(existing.registeredCount, item.registeredCount)
+            });
+          } else {
+            mergedMap.set(item.id, item);
+          }
+        });
+
+        const sortedMerged = Array.from(mergedMap.values());
+        setScheduledTournaments(sortedMerged);
+      }
+      if (isMounted) setIsSyncing(false);
+    };
+
+    // Initial fetch
+    syncTournaments();
+
+    // Auto-poll every 4 seconds for instant real-time sync across devices
+    const intervalId = setInterval(syncTournaments, 4000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [setScheduledTournaments]);
+
   const [title, setTitle] = useState('2026 NACETEM Inter-Departmental Championship');
   const [competitionMode, setCompMode] = useState<'intra_dept' | 'inter_agency'>('intra_dept');
   const [targetOrg, setTargetOrg] = useState('National Centre for Technology Management (NACETEM)');
@@ -39,10 +89,17 @@ export const ScheduleTournamentPage: React.FC = () => {
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gradient-to-r from-emerald-800 via-emerald-900 to-teal-950 p-6 sm:p-8 rounded-3xl text-white shadow-xl">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-bold mb-2">
-            <Calendar className="w-3.5 h-3.5" />
-            <span>TOURNAMENT SCHEDULING & SUBSCRIPTION HUB</span>
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-bold">
+              <Calendar className="w-3.5 h-3.5" />
+              <span>TOURNAMENT SCHEDULING & SUBSCRIPTION HUB</span>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[11px] font-bold">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+              <span>Live Global Sync Active</span>
+            </div>
           </div>
+
           <h1 className="text-3xl sm:text-4xl font-extrabold">Scheduled Tournaments</h1>
           <p className="text-xs text-emerald-100 mt-1 max-w-2xl">
             Schedule future Inter-Agency & Inter-Departmental competitions with date & time filters, or subscribe to upcoming events to reserve your competitive seat.
