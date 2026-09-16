@@ -10,48 +10,44 @@ export const ScheduleTournamentPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Real-time Cloud Sync across devices
+  const syncTournaments = async () => {
+    setIsSyncing(true);
+    const remoteList = await cloudSyncService.fetchCloudTournaments();
+    if (remoteList && remoteList.length > 0) {
+      // Merge remote tournaments with local state
+      const currentList = useStore.getState().scheduledTournaments;
+      const mergedMap = new Map<string, ScheduledTournamentItem>();
+      
+      // Add existing preset/local items
+      currentList.forEach(item => mergedMap.set(item.id, item));
+      // Merge cloud items (overwrite or add new)
+      remoteList.forEach(item => {
+        const existing = mergedMap.get(item.id);
+        if (existing) {
+          mergedMap.set(item.id, {
+            ...item,
+            isSubscribed: existing.isSubscribed || item.isSubscribed,
+            registeredCount: Math.max(existing.registeredCount, item.registeredCount)
+          });
+        } else {
+          mergedMap.set(item.id, item);
+        }
+      });
+
+      const sortedMerged = Array.from(mergedMap.values());
+      setScheduledTournaments(sortedMerged);
+    }
+    setIsSyncing(false);
+  };
+
   useEffect(() => {
-    let isMounted = true;
-
-    const syncTournaments = async () => {
-      setIsSyncing(true);
-      const remoteList = await cloudSyncService.fetchCloudTournaments();
-      if (isMounted && remoteList && remoteList.length > 0) {
-        // Merge remote tournaments with local state
-        const currentList = useStore.getState().scheduledTournaments;
-        const mergedMap = new Map<string, ScheduledTournamentItem>();
-        
-        // Add existing preset/local items
-        currentList.forEach(item => mergedMap.set(item.id, item));
-        // Merge cloud items (overwrite or add new)
-        remoteList.forEach(item => {
-          const existing = mergedMap.get(item.id);
-          if (existing) {
-            // Preserve user's local subscription state if subscribed locally
-            mergedMap.set(item.id, {
-              ...item,
-              isSubscribed: existing.isSubscribed || item.isSubscribed,
-              registeredCount: Math.max(existing.registeredCount, item.registeredCount)
-            });
-          } else {
-            mergedMap.set(item.id, item);
-          }
-        });
-
-        const sortedMerged = Array.from(mergedMap.values());
-        setScheduledTournaments(sortedMerged);
-      }
-      if (isMounted) setIsSyncing(false);
-    };
-
     // Initial fetch
     syncTournaments();
 
-    // Auto-poll every 4 seconds for instant real-time sync across devices
-    const intervalId = setInterval(syncTournaments, 4000);
+    // Auto-poll every 2.5 seconds for instant real-time 2-device sync
+    const intervalId = setInterval(syncTournaments, 2500);
 
     return () => {
-      isMounted = false;
       clearInterval(intervalId);
     };
   }, [setScheduledTournaments]);
@@ -64,9 +60,9 @@ export const ScheduleTournamentPage: React.FC = () => {
   const [badgeTitle, setBadgeTitle] = useState('🏆 2026 NACETEM Inter-Dept Champion Trophy');
   const [description, setDescription] = useState('Official 3-stage competition testing Public Service Rules mastery across departments.');
 
-  const handleCreateSchedule = (e: React.FormEvent) => {
+  const handleCreateSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newItem = {
+    const newItem: ScheduledTournamentItem = {
       id: `sched-${Date.now()}`,
       title,
       competitionMode,
@@ -76,12 +72,17 @@ export const ScheduleTournamentPage: React.FC = () => {
       winnerBadgeTitle: badgeTitle,
       registeredCount: 1,
       isSubscribed: true,
-      createdBy: user?.name || 'Administrator',
+      createdBy: user?.name ? `${user.name} (${user.mdaName || 'NACETEM'})` : 'Administrator',
       description
     };
     addScheduledTournament(newItem);
     setIsModalOpen(false);
+    
+    // Publish immediately to global cloud
+    await cloudSyncService.publishScheduledTournament(newItem);
+    await syncTournaments();
   };
+
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fadeIn">
@@ -98,7 +99,15 @@ export const ScheduleTournamentPage: React.FC = () => {
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
               <span>Live Global Sync Active</span>
             </div>
+            <button
+              onClick={syncTournaments}
+              title="Force Refresh Remote Schedules"
+              className="p-1 rounded-full bg-white/10 hover:bg-white/20 text-emerald-300 transition-all flex items-center justify-center"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+            </button>
           </div>
+
 
           <h1 className="text-3xl sm:text-4xl font-extrabold">Scheduled Tournaments</h1>
           <p className="text-xs text-emerald-100 mt-1 max-w-2xl">
