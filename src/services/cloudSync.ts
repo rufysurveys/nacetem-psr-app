@@ -13,16 +13,48 @@ const broadcastChannel = typeof window !== 'undefined' && 'BroadcastChannel' in 
   ? new BroadcastChannel('nacetem_psr_tournament_sync_v4')
   : null;
 
+export const DEFAULT_SCHEDULED_TOURNAMENTS: ScheduledTournamentItem[] = [
+  {
+    id: 'sched-01',
+    title: '2026 National Inter-Agency Championship',
+    competitionMode: 'inter_agency',
+    targetOrg: 'National All Agencies',
+    startDateTime: '2026-09-25T09:00',
+    cutoffDateTime: '2026-09-24T23:59',
+    winnerBadgeTitle: '🏆 National Inter-Agency Champion Trophy',
+    registeredCount: 4890,
+    isSubscribed: true,
+    createdBy: 'Administrator',
+    description: 'Nationwide public service tournament ranking all federal ministries and agencies.'
+  },
+  {
+    id: 'sched-02',
+    title: 'NACETEM Inter-Departmental Challenge Cup',
+    competitionMode: 'intra_dept',
+    targetOrg: 'National Centre for Technology Management (NACETEM)',
+    startDateTime: '2026-09-20T10:00',
+    cutoffDateTime: '2026-09-19T23:59',
+    winnerBadgeTitle: '🥇 NACETEM Intra-Org Champion Badge',
+    registeredCount: 1420,
+    isSubscribed: false,
+    createdBy: 'Abubakar Rufai',
+    description: 'Departmental challenge inside NACETEM testing PPL, Research, Technology Transfer, and Finance officers.'
+  }
+];
+
 export const cloudSyncService = {
   // Read cached items from LocalStorage
-  getSavedLocalTournaments(): ScheduledTournamentItem[] | null {
+  getSavedLocalTournaments(): ScheduledTournamentItem[] {
     try {
       const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (raw) return JSON.parse(raw);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
     } catch (e) {
       console.warn('LocalStorage error:', e);
     }
-    return null;
+    return DEFAULT_SCHEDULED_TOURNAMENTS;
   },
 
   // Save items to LocalStorage & broadcast to other local tabs
@@ -48,14 +80,14 @@ export const cloudSyncService = {
   },
 
   // Fetch all tournaments globally across devices (Abuja, Lagos, etc.) with rate-limit-free CDN
-  async fetchCloudTournaments(): Promise<ScheduledTournamentItem[] | null> {
+  async fetchCloudTournaments(): Promise<ScheduledTournamentItem[]> {
     try {
       // 1. Primary: Raw GitHub CDN (Zero rate limits, instant global response)
       const rawCdnUrl = `https://gist.githubusercontent.com/rufysurveys/${GIST_ID}/raw/gist_db.json?t=${Date.now()}`;
       const cdnRes = await fetch(rawCdnUrl, { cache: 'no-store' });
       if (cdnRes.ok) {
         const items = await cdnRes.json();
-        if (Array.isArray(items)) {
+        if (Array.isArray(items) && items.length > 0) {
           return items;
         }
       }
@@ -75,11 +107,11 @@ export const cloudSyncService = {
       const contentStr = json?.files?.['gist_db.json']?.content;
       if (contentStr) {
         const items = JSON.parse(contentStr);
-        if (Array.isArray(items)) {
+        if (Array.isArray(items) && items.length > 0) {
           return items;
         }
       }
-      return null;
+      return this.getSavedLocalTournaments();
     } catch (err) {
       console.warn('Gist Fetch Error:', err);
       return this.getSavedLocalTournaments();

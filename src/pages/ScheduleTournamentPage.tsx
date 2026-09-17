@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useStore, ScheduledTournamentItem } from '../store/useStore';
-import { cloudSyncService } from '../services/cloudSync';
+import { cloudSyncService, DEFAULT_SCHEDULED_TOURNAMENTS } from '../services/cloudSync';
 import { Calendar, Clock, Trophy, Users, CheckCircle2, Plus, Globe, Building2, Sparkles, Award, Swords, RefreshCw } from 'lucide-react';
 
 export const ScheduleTournamentPage: React.FC = () => {
@@ -18,24 +18,16 @@ export const ScheduleTournamentPage: React.FC = () => {
       const currentList = useStore.getState().scheduledTournaments;
       const mergedMap = new Map<string, ScheduledTournamentItem>();
       
-      // Add existing preset/local items
       currentList.forEach(item => mergedMap.set(item.id, item));
-      // Merge cloud items (overwrite or add new)
-      remoteList.forEach(item => {
-        const existing = mergedMap.get(item.id);
-        if (existing) {
-          mergedMap.set(item.id, {
-            ...item,
-            isSubscribed: existing.isSubscribed || item.isSubscribed,
-            registeredCount: Math.max(existing.registeredCount, item.registeredCount)
-          });
-        } else {
-          mergedMap.set(item.id, item);
-        }
-      });
+      remoteList.forEach(item => mergedMap.set(item.id, item));
 
       const sortedMerged = Array.from(mergedMap.values());
-      setScheduledTournaments(sortedMerged);
+      setScheduledTournaments(sortedMerged.length > 0 ? sortedMerged : DEFAULT_SCHEDULED_TOURNAMENTS);
+    } else {
+      const currentList = useStore.getState().scheduledTournaments;
+      if (!currentList || currentList.length === 0) {
+        setScheduledTournaments(DEFAULT_SCHEDULED_TOURNAMENTS);
+      }
     }
     setIsSyncing(false);
   };
@@ -269,24 +261,53 @@ export const ScheduleTournamentPage: React.FC = () => {
           <span className="text-xs text-slate-500 font-medium">Subscribe now to reserve your entry pass</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {scheduledTournaments.map((tourn) => {
-            const formattedStart = new Date(tourn.startDateTime).toLocaleString('en-US', {
-              weekday: 'short',
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            });
-
-            return (
-              <div 
-                key={tourn.id} 
-                className={`bright-card p-6 rounded-3xl space-y-4 flex flex-col justify-between border-slate-200 ${
-                  tourn.isSubscribed ? 'ring-2 ring-emerald-500 bg-emerald-50/30' : ''
-                }`}
+        {scheduledTournaments.length === 0 ? (
+          <div className="bright-card p-8 rounded-3xl text-center space-y-4 border border-slate-200">
+            <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto border border-amber-300">
+              <Calendar className="w-8 h-8" />
+            </div>
+            <div>
+              <h3 className="text-xl font-extrabold text-slate-900">No Scheduled Competitions Yet</h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
+                No future competitions are scheduled at the moment. You can schedule a new competition or restore default competitions.
+              </p>
+            </div>
+            <div className="flex flex-wrap justify-center gap-3 pt-2">
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs shadow-md transition-all flex items-center gap-2"
               >
+                <Plus className="w-4 h-4 stroke-[3]" />
+                <span>+ Schedule New Tournament</span>
+              </button>
+              <button
+                onClick={() => setScheduledTournaments(DEFAULT_SCHEDULED_TOURNAMENTS)}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-5 py-2.5 rounded-xl text-xs transition-all flex items-center gap-2"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Restore Default Competitions</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {scheduledTournaments.map((tourn) => {
+              const formattedStart = new Date(tourn.startDateTime).toLocaleString('en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+              });
+
+              return (
+                <div 
+                  key={tourn.id} 
+                  className={`bright-card p-6 rounded-3xl space-y-4 flex flex-col justify-between border-slate-200 ${
+                    tourn.isSubscribed ? 'ring-2 ring-emerald-500 bg-emerald-50/30' : ''
+                  }`}
+                >
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className={`text-[10px] font-extrabold uppercase px-3 py-1 rounded-lg ${
@@ -363,6 +384,7 @@ export const ScheduleTournamentPage: React.FC = () => {
             );
           })}
         </div>
+        )}
       </div>
 
     </div>
