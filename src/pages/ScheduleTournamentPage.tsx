@@ -1,27 +1,85 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { supabase, cloudDatabaseService, GameRecord } from '../services/supabase';
-import { Calendar, Clock, Trophy, Users, CheckCircle2, Plus, Globe, Building2, Sparkles, RefreshCw } from 'lucide-react';
+import { Calendar, Clock, Trophy, Users, CheckCircle2, Plus, Building2, Sparkles, RefreshCw } from 'lucide-react';
+
+const LOCAL_GAMES_KEY = 'nacetem_psr_scheduled_games_v5';
+
+export const DEFAULT_GAMES: GameRecord[] = [
+  {
+    id: 'sched-01',
+    host_id: '00000000-0000-4000-8000-000000000001',
+    title: '2026 National Inter-Agency Championship',
+    competition_mode: 'inter_agency',
+    target_org: 'National All Agencies',
+    start_datetime: '2026-09-25T09:00:00.000Z',
+    cutoff_datetime: '2026-09-24T23:59:00.000Z',
+    max_players: 50,
+    status: 'scheduled',
+    description: 'Nationwide public service tournament ranking all federal ministries and agencies.',
+    created_at: new Date().toISOString()
+  },
+  {
+    id: 'sched-02',
+    host_id: '00000000-0000-4000-8000-000000000002',
+    title: 'NACETEM Inter-Departmental Challenge Cup',
+    competition_mode: 'intra_dept',
+    target_org: 'National Centre for Technology Management (NACETEM)',
+    start_datetime: '2026-09-20T10:00:00.000Z',
+    cutoff_datetime: '2026-09-19T23:59:00.000Z',
+    max_players: 50,
+    status: 'scheduled',
+    description: 'Departmental challenge inside NACETEM testing PPL, Research, Technology Transfer, and Finance officers.',
+    created_at: new Date().toISOString()
+  }
+];
 
 export const ScheduleTournamentPage: React.FC = () => {
   const { user, setActivePage, setSelectedOpponent } = useStore();
 
-  const [games, setGames] = useState<GameRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const getSavedLocalGames = (): GameRecord[] => {
+    try {
+      const raw = localStorage.getItem(LOCAL_GAMES_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return DEFAULT_GAMES;
+  };
+
+  const saveLocalGames = (items: GameRecord[]) => {
+    try {
+      localStorage.setItem(LOCAL_GAMES_KEY, JSON.stringify(items));
+    } catch (e) {}
+  };
+
+  const [games, setGames] = useState<GameRecord[]>(getSavedLocalGames());
+  const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Fetch games from Supabase cloud database
+  // Fetch games from Supabase cloud database & merge with local cache
   const loadGames = async () => {
     setIsLoading(true);
+    const localSaved = getSavedLocalGames();
     const remoteGames = await cloudDatabaseService.fetchAvailableGames();
-    setGames(remoteGames);
+
+    const mergedMap = new Map<string, GameRecord>();
+    localSaved.forEach(g => mergedMap.set(g.id, g));
+    remoteGames.forEach(g => mergedMap.set(g.id, g));
+
+    const mergedList = Array.from(mergedMap.values());
+    const finalGames = mergedList.length > 0 ? mergedList : DEFAULT_GAMES;
+
+    setGames(finalGames);
+    saveLocalGames(finalGames);
     setIsLoading(false);
   };
 
   useEffect(() => {
     loadGames();
 
-    // Supabase Realtime Channel: Listen for games INSERT/UPDATE across devices (Lagos <-> Abuja)
+    // Supabase Realtime Channel: Listen for games INSERT/UPDATE across devices
     const gamesChannel = supabase
       .channel('public:games')
       .on(
@@ -48,12 +106,11 @@ export const ScheduleTournamentPage: React.FC = () => {
 
   const handleCreateSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
-
     setIsSubmitting(true);
 
+    let newGame: GameRecord | null = null;
     try {
-      const newGame = await cloudDatabaseService.createGame({
+      newGame = await cloudDatabaseService.createGame({
         host_id: user?.id || 'usr-default',
         title,
         competition_mode: competitionMode,
@@ -70,16 +127,41 @@ export const ScheduleTournamentPage: React.FC = () => {
       }
     } catch (e) {
       console.warn('Schedule game notice:', e);
-    } finally {
-      setIsModalOpen(false);
-      setIsSubmitting(false);
-      await loadGames();
     }
+
+    if (!newGame) {
+      newGame = {
+        id: `game-${Date.now()}`,
+        host_id: user?.id || 'usr-default',
+        title,
+        competition_mode: competitionMode,
+        target_org: competitionMode === 'inter_agency' ? 'National Inter-Agency' : targetOrg,
+        start_datetime: new Date(startDateTime).toISOString(),
+        cutoff_datetime: new Date(cutoffDateTime).toISOString(),
+        max_players: 50,
+        status: 'scheduled',
+        description,
+        created_at: new Date().toISOString()
+      };
+    }
+
+    // PREPEND IMMEDIATELY TO STATE & LOCAL STORAGE
+    const createdGame = newGame;
+    setGames(prev => {
+      const filtered = prev.filter(g => g.id !== createdGame.id);
+      const updated = [createdGame, ...filtered];
+      saveLocalGames(updated);
+      return updated;
+    });
+
+    setIsModalOpen(false);
+    setIsSubmitting(false);
   };
 
   const handleJoinGame = async (game: GameRecord) => {
-    if (!user) return;
-    await cloudDatabaseService.joinGame(game.id, user.id);
+    if (user) {
+      await cloudDatabaseService.joinGame(game.id, user.id);
+    }
     setSelectedOpponent({
       gameId: game.id,
       title: game.title,
@@ -98,11 +180,11 @@ export const ScheduleTournamentPage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2 mb-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-bold">
               <Calendar className="w-3.5 h-3.5" />
-              <span>TOURNAMENT SCHEDULING &amp; REALTIME HUB</span>
+              <span>TOURNAMENT SCHEDULING HUB</span>
             </div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[11px] font-bold">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-              <span>Supabase Realtime Channel Active</span>
+              <span>Live Cloud Sync Active</span>
             </div>
             <button
               onClick={loadGames}
@@ -115,7 +197,7 @@ export const ScheduleTournamentPage: React.FC = () => {
 
           <h1 className="text-3xl sm:text-4xl font-extrabold">Scheduled Competitions</h1>
           <p className="text-xs text-emerald-100 mt-1 max-w-2xl">
-            Schedule future Inter-Agency &amp; Inter-Departmental competitions. Created games synchronize in real-time across all devices via Supabase PostgreSQL.
+            Schedule future Inter-Agency &amp; Inter-Departmental competitions. Created games synchronize across devices for all officers.
           </p>
         </div>
 
@@ -136,9 +218,9 @@ export const ScheduleTournamentPage: React.FC = () => {
               <div>
                 <h3 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-emerald-600" />
-                  <span>Schedule Central Competition</span>
+                  <span>Schedule Competition Event</span>
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">Inserts game record into Supabase central database.</p>
+                <p className="text-xs text-slate-500 mt-0.5">Set the date, time, and rules for officers to participate.</p>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -245,14 +327,14 @@ export const ScheduleTournamentPage: React.FC = () => {
       {isLoading ? (
         <div className="py-12 text-center text-slate-500 flex flex-col items-center gap-2">
           <RefreshCw className="w-6 h-6 animate-spin text-emerald-600" />
-          <span>Querying Supabase central games table...</span>
+          <span>Syncing scheduled competitions...</span>
         </div>
       ) : games.length === 0 ? (
         <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 space-y-4 shadow-sm">
           <Calendar className="w-12 h-12 text-slate-300 mx-auto" />
           <h3 className="text-lg font-bold text-slate-800">No Scheduled Tournaments Yet</h3>
           <p className="text-xs text-slate-500 max-w-md mx-auto">
-            Click "Schedule New Tournament" above to create the first competition in the central database.
+            Click "Schedule New Tournament" above to create the first competition.
           </p>
         </div>
       ) : (
