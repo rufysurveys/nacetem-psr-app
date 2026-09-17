@@ -129,7 +129,7 @@ export const AuthPage: React.FC = () => {
       }
 
       // 2. Upload Custom Profile Photo to Supabase Storage if file selected
-      let finalAvatarUrl = selectedAvatarUrl;
+      let finalAvatarUrl = customPhotoPreview || selectedAvatarUrl;
       if (customPhotoFile) {
         const uploadedUrl = await cloudDatabaseService.uploadProfilePhoto(user.id, customPhotoFile);
         if (uploadedUrl) {
@@ -281,7 +281,7 @@ export const AuthPage: React.FC = () => {
 
             <div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-400/30 text-emerald-300 text-xs font-bold mb-3">
-                <Sparkles className="w-3.5 h-3.5" /> Supabase Production Auth Connected
+                <Sparkles className="w-3.5 h-3.5" /> Federal Civil Service Auth Portal
               </div>
               <h1 className="text-3xl font-extrabold tracking-tight">NACETEM Gamification App</h1>
               <p className="text-sm text-emerald-100 mt-2 leading-relaxed">
@@ -296,7 +296,7 @@ export const AuthPage: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-emerald-300 shrink-0" />
-                <span>Supabase PostgreSQL Database Storage</span>
+                <span>Central Cloud Database</span>
               </div>
               <div className="flex items-center gap-2">
                 <Globe className="w-4 h-4 text-emerald-300 shrink-0" />
@@ -361,8 +361,8 @@ export const AuthPage: React.FC = () => {
               {regStep === 'form' && (
                 <form onSubmit={handleSignUpSubmit} className="space-y-4 animate-fadeIn">
                   <div>
-                    <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Officer Registration (Supabase Auth)</h2>
-                    <p className="text-xs text-slate-500 mt-1">Fill in your profile details. Registration dispatches a real activation email link.</p>
+                    <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Officer Registration</h2>
+                    <p className="text-xs text-slate-500 mt-1">Fill in your profile details. Registration dispatches an official activation email link.</p>
                   </div>
 
                   {signUpError && (

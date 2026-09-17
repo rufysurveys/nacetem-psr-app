@@ -5,7 +5,7 @@ import { WheelOfRules, WheelSegment } from '../gameshow/WheelOfRules';
 import { HostDialogue } from '../gameshow/HostDialogue';
 import { Lifelines } from '../gameshow/Lifelines';
 import { playCorrectSound, playBuzzerSound, playFanfareSound } from '../../utils/audio';
-import { Clock, AlertTriangle, CheckCircle2, XCircle, BookOpen, ArrowRight, Trophy, Zap, Sparkles } from 'lucide-react';
+import { Clock, AlertTriangle, CheckCircle2, Trophy, Shield, Maximize, AlertOctagon, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export const QuizRunner: React.FC = () => {
@@ -25,6 +25,11 @@ export const QuizRunner: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState(15);
   const [tabSwitchCount, setTabSwitchCount] = useState(0);
 
+  // GLOBAL STANDARD PROCTORING STATE
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [proctoringWarning, setProctoringWarning] = useState<string | null>(null);
+  const [mouseLeftViewport, setMouseLeftViewport] = useState(false);
+
   // Lifelines state
   const [used5050, setUsed5050] = useState(false);
   const [usedPeek, setUsedPeek] = useState(false);
@@ -35,21 +40,73 @@ export const QuizRunner: React.FC = () => {
   const questionStartTimeRef = useRef<number>(Date.now());
   const currentQ: Question = stageQuestions[currentIdx] || stageQuestions[0];
 
-  // Anti-cheat monitoring
+  // Request Fullscreen Proctoring Mode
+  const handleEnableFullscreen = () => {
+    try {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen();
+      }
+    } catch (e) {}
+  };
+
+  // GLOBAL PROCTORING SUITE (Fullscreen, Tab Focus, Mouse Boundary & Shortcut Prevention)
   useEffect(() => {
+    const handleFullscreenChange = () => {
+      const activeFS = !!document.fullscreenElement;
+      setIsFullscreen(activeFS);
+      if (!activeFS && gameState === 'answering') {
+        setProctoringWarning('⚠️ Proctoring Alert: Fullscreen Exited! Please maintain fullscreen during official competitions.');
+        setTabSwitchCount(prev => prev + 1);
+        logAntiCheatEvent('tab_switch', 'Participant exited fullscreen proctoring mode', 'medium');
+      }
+    };
+
     const handleVisibilityChange = () => {
       if (document.hidden && gameState === 'answering') {
         setTabSwitchCount(prev => prev + 1);
+        setProctoringWarning('⚠️ Proctoring Violation: Focus lost / Tab switch detected!');
         logAntiCheatEvent(
           'tab_switch',
-          `Participant left quiz window during Game Show Question #${currentIdx + 1}`,
-          'medium'
+          `Participant switched tab during Question #${currentIdx + 1}`,
+          'high'
         );
       }
     };
 
+    const handleMouseLeave = (e: MouseEvent) => {
+      if (e.clientY <= 0 || e.clientX <= 0 || e.clientX >= window.innerWidth || e.clientY >= window.innerHeight) {
+        if (gameState === 'answering') {
+          setMouseLeftViewport(true);
+          setProctoringWarning('⚠️ Proctoring Warning: Mouse cursor left the active exam window!');
+          setTimeout(() => setMouseLeftViewport(false), 3000);
+        }
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent Copy, Paste, Cut, F12 Developer Tools
+      if (
+        (e.ctrlKey && (e.key === 'c' || e.key === 'v' || e.key === 'u' || e.key === 'a')) ||
+        (e.metaKey && (e.key === 'c' || e.key === 'v')) ||
+        e.key === 'F12'
+      ) {
+        e.preventDefault();
+        setProctoringWarning('⚠️ Proctoring Alert: Clipboard & Developer shortcuts are disabled during official competitions.');
+        logAntiCheatEvent('pasting_input', 'Attempted unauthorized copy/paste or shortcut', 'medium');
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
     window.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => window.removeEventListener('visibilitychange', handleVisibilityChange);
+    document.addEventListener('mouseleave', handleMouseLeave);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      document.removeEventListener('mouseleave', handleMouseLeave);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [currentIdx, gameState, logAntiCheatEvent]);
 
   // Timer per question
@@ -119,7 +176,6 @@ export const QuizRunner: React.FC = () => {
     const wrongIndices = currentQ.options
       .map((_, idx) => idx)
       .filter(idx => idx !== currentQ.correctAnswer);
-    // Hide first 2 wrong options
     setHiddenOptionIndices(wrongIndices.slice(0, 2));
   };
 
@@ -142,7 +198,7 @@ export const QuizRunner: React.FC = () => {
       setIsAnswerSubmitted(false);
       setHiddenOptionIndices([]);
       setShowPeekCitation(false);
-      setGameState('wheel_spin'); // Spin wheel for next round!
+      setGameState('wheel_spin');
     } else {
       finishQuiz();
     }
@@ -171,7 +227,7 @@ export const QuizRunner: React.FC = () => {
     const passed = accuracy >= 70;
 
     return (
-      <div className="max-w-3xl mx-auto px-4 py-12 animate-fadeIn space-y-6">
+      <div className="max-w-3xl mx-auto px-4 py-12 animate-fadeIn space-y-6 select-none">
         <HostDialogue
           message={passed 
             ? `TREMENDOUS SHOWMANSHIP! You scored ${accuracy}% accuracy and conquered the Wheel of Public Service Rules!` 
@@ -198,36 +254,24 @@ export const QuizRunner: React.FC = () => {
           <div className="grid grid-cols-3 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200">
             <div>
               <span className="block text-2xl font-black text-emerald-600">{accuracy}%</span>
-              <span className="text-[10px] font-bold text-slate-500 uppercase">Accuracy</span>
+              <span className="text-xs text-slate-500 font-bold">Accuracy</span>
             </div>
             <div>
               <span className="block text-2xl font-black text-slate-900">{totalCorrect} / {stageQuestions.length}</span>
-              <span className="text-[10px] font-bold text-slate-500 uppercase">Correct</span>
+              <span className="text-xs text-slate-500 font-bold">Correct Answers</span>
             </div>
             <div>
-              <span className={`block text-2xl font-black ${tabSwitchCount > 0 ? 'text-amber-600' : 'text-slate-700'}`}>
-                {tabSwitchCount}
-              </span>
-              <span className="text-[10px] font-bold text-slate-500 uppercase">Tab Warnings</span>
+              <span className="block text-2xl font-black text-rose-600">{tabSwitchCount}</span>
+              <span className="text-xs text-slate-500 font-bold">Proctoring Flagged</span>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-4 pt-4">
+          <div className="flex justify-center gap-3 pt-4">
             <button
               onClick={() => setActivePage('tournaments')}
-              className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl text-sm transition-all shadow-md"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 py-3 rounded-2xl text-xs shadow-md transition-all"
             >
-              Return to Tournaments Hub
-            </button>
-            <button
-              onClick={() => {
-                setGameState('wheel_spin');
-                setCurrentIdx(0);
-                setUserAnswers([]);
-              }}
-              className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 font-bold py-3.5 rounded-xl text-sm transition-all"
-            >
-              Spin & Replay Qualifier
+              Return to Tournament Hub
             </button>
           </div>
         </div>
@@ -235,171 +279,144 @@ export const QuizRunner: React.FC = () => {
     );
   }
 
-  // WHEEL SPIN SCREEN
-  if (gameState === 'wheel_spin') {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-8 space-y-6 animate-fadeIn">
-        <HostDialogue
-          message={`Welcome to Round ${currentIdx + 1} of the Public Service Rules Game Show! Spin the Wheel of Rules to determine your next category & score multiplier!`}
-        />
-
-        <div className="bright-card rounded-3xl p-6 text-center space-y-4">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-800 text-xs font-black uppercase">
-            <Sparkles className="w-4 h-4 text-amber-600" />
-            <span>Round {currentIdx + 1} of {stageQuestions.length} • Wheel of Rules</span>
-          </div>
-
-          <WheelOfRules onSpinComplete={handleWheelSpinComplete} />
-        </div>
-      </div>
-    );
-  }
-
-  // ANSWERING QUESTION SCREEN
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8 space-y-6 animate-fadeIn">
-      
-      {/* Host Dialogue */}
-      <HostDialogue
-        message={isAnswerSubmitted 
-          ? (selectedOpt === currentQ.correctAnswer ? `EXCELLENT! Spot on! Take a look at statutory citation ${currentQ.psrCitation.ruleNumber}.` : `Ooh, not quite! According to ${currentQ.psrCitation.ruleNumber}, check the explanation below.`)
-          : `For Round ${currentIdx + 1}: ${activeSegment?.label || 'Public Service Rules'}! Select your answer carefully before time runs out!`
-        }
-      />
-
-      {/* Top Controls Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-slate-200 p-4 rounded-2xl shadow-sm">
-        
-        {/* Lifelines */}
-        <Lifelines
-          used5050={used5050}
-          usedPeek={usedPeek}
-          usedExtraTime={usedExtraTime}
-          onUse5050={handleUse5050}
-          onUsePeek={handleUsePeek}
-          onUseExtraTime={handleUseExtraTime}
-          disabled={isAnswerSubmitted}
-        />
-
-        {/* Countdown */}
+    <div 
+      className="max-w-4xl mx-auto px-4 py-6 space-y-6 animate-fadeIn font-sans select-none"
+      onContextMenu={(e) => e.preventDefault()}
+      onCopy={(e) => e.preventDefault()}
+      onCut={(e) => e.preventDefault()}
+      onPaste={(e) => e.preventDefault()}
+    >
+      {/* GLOBAL STANDARD PROCTORING STATUS HEADER BANNER */}
+      <div className="bg-slate-900 text-white px-4 py-2.5 rounded-2xl flex items-center justify-between text-xs border border-slate-800 shadow-md">
         <div className="flex items-center gap-2">
-          <Clock className={`w-5 h-5 ${timeLeft <= 5 ? 'text-rose-600 animate-bounce' : 'text-emerald-600'}`} />
-          <span className={`font-mono font-black text-xl ${timeLeft <= 5 ? 'text-rose-600' : 'text-slate-900'}`}>
-            00:{String(timeLeft).padStart(2, '0')}
+          <Shield className="w-4 h-4 text-emerald-400" />
+          <span className="font-extrabold text-emerald-300">PROCTORING ACTIVE</span>
+          <span className="text-slate-400">|</span>
+          <span className="text-slate-300 font-semibold">Integrity: <strong className="text-white">{Math.max(0, 100 - (tabSwitchCount * 15))}%</strong></span>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${tabSwitchCount > 0 ? 'bg-rose-950 text-rose-300 border border-rose-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'}`}>
+            Strikes: {tabSwitchCount} / 3
           </span>
-        </div>
-      </div>
 
-      {tabSwitchCount > 0 && (
-        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 px-4 py-2 rounded-xl text-amber-800 text-xs font-semibold">
-          <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
-          <span>Anti-Cheat Warning: Tab switch logged ({tabSwitchCount}). Keep window focused.</span>
-        </div>
-      )}
-
-      {/* Peek Lifeline Rule Excerpt */}
-      {showPeekCitation && (
-        <div className="bg-teal-50 border border-teal-300 p-4 rounded-2xl text-xs space-y-1 animate-fadeIn">
-          <span className="font-extrabold text-teal-800">📖 RULEBOOK PEEK CITATION EXCERPT ({currentQ.psrCitation.ruleNumber}):</span>
-          <p className="italic text-slate-700 bg-white p-2.5 rounded-xl border border-teal-200">
-            "{currentQ.psrCitation.excerpt}"
-          </p>
-        </div>
-      )}
-
-      {/* Question Card */}
-      <div className="bright-card rounded-3xl p-6 sm:p-8 space-y-6">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold text-emerald-700 uppercase tracking-wider">
-              {currentQ.chapter}
-            </span>
-            {activeSegment?.multiplier && activeSegment.multiplier > 1 && (
-              <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white font-extrabold text-[10px] shadow">
-                🔥 2X DOUBLE XP ROUND
-              </span>
-            )}
-          </div>
-          
-          <h3 className="text-xl sm:text-2xl font-bold text-slate-900 leading-snug">
-            {currentQ.title}
-          </h3>
-          {currentQ.scenario && (
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs sm:text-sm text-slate-700 italic leading-relaxed">
-              "{currentQ.scenario}"
-            </div>
+          {!isFullscreen && (
+            <button
+              onClick={handleEnableFullscreen}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-3 py-1 rounded-xl text-[11px] transition-all flex items-center gap-1 border border-emerald-500"
+            >
+              <Maximize className="w-3 h-3" />
+              <span>Fullscreen</span>
+            </button>
           )}
         </div>
-
-        {/* Options */}
-        <div className="space-y-3">
-          {currentQ.options.map((optionText: string, idx: number) => {
-            const isHidden = hiddenOptionIndices.includes(idx);
-            if (isHidden) return null; // 50:50 Lifeline hiding
-
-            const isSelected = selectedOpt === idx;
-            const isCorrect = idx === currentQ.correctAnswer;
-            
-            let btnStyle = "bg-white border-slate-200 text-slate-800 hover:border-emerald-500 hover:bg-emerald-50/50";
-            if (isAnswerSubmitted) {
-              if (isCorrect) btnStyle = "bg-emerald-50 border-emerald-600 text-emerald-900 font-bold shadow-sm";
-              else if (isSelected) btnStyle = "bg-rose-50 border-rose-500 text-rose-900";
-              else btnStyle = "bg-slate-50 border-slate-200 text-slate-400";
-            } else if (isSelected) {
-              btnStyle = "bg-emerald-50 border-emerald-600 text-emerald-900 font-bold";
-            }
-
-            return (
-              <button
-                key={idx}
-                disabled={isAnswerSubmitted}
-                onClick={() => handleAnswerSelect(idx)}
-                className={`w-full text-left p-4 rounded-2xl border text-sm transition-all flex items-start justify-between gap-3 ${btnStyle}`}
-              >
-                <div className="flex items-start gap-3">
-                  <span className="w-6 h-6 rounded-lg bg-slate-100 border border-slate-300 flex items-center justify-center text-xs font-bold text-slate-700 shrink-0">
-                    {String.fromCharCode(65 + idx)}
-                  </span>
-                  <span>{optionText}</span>
-                </div>
-
-                {isAnswerSubmitted && isCorrect && <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />}
-                {isAnswerSubmitted && isSelected && !isCorrect && <XCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Authoritative Citation Display Post Answer */}
-        {isAnswerSubmitted && (
-          <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-3 animate-fadeIn">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-extrabold text-emerald-800 flex items-center gap-1.5">
-                <BookOpen className="w-4 h-4 text-emerald-600" />
-                <span>AUTHORITATIVE RULE CITATION: {currentQ.psrCitation.ruleNumber}</span>
-              </span>
-              <span className="text-[11px] text-emerald-700 font-semibold">{currentQ.psrCitation.sectionTitle}</span>
-            </div>
-            
-            <p className="text-xs text-slate-800 italic bg-white p-3 rounded-xl border border-emerald-200">
-              "{currentQ.psrCitation.excerpt}"
-            </p>
-
-            <p className="text-xs text-slate-700 leading-relaxed">
-              <strong className="text-emerald-800">Practical Application:</strong> {currentQ.explanation}
-            </p>
-
-            <button
-              onClick={handleNextQuestion}
-              className="mt-2 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2"
-            >
-              <span>{currentIdx + 1 < stageQuestions.length ? 'Spin Wheel for Next Round' : 'View Qualifier Game Show Results'}</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
       </div>
+
+      {/* PROCTORING ALERT OVERLAY WARNING BANNER */}
+      {proctoringWarning && (
+        <div className="bg-rose-600 text-white p-3 rounded-2xl text-xs font-bold shadow-lg flex items-center justify-between animate-bounce">
+          <div className="flex items-center gap-2">
+            <AlertOctagon className="w-5 h-5 shrink-0" />
+            <span>{proctoringWarning}</span>
+          </div>
+          <button
+            onClick={() => setProctoringWarning(null)}
+            className="bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* WHEEL SPIN PHASE */}
+      {gameState === 'wheel_spin' && (
+        <div className="space-y-6 text-center">
+          <HostDialogue message="Spin the Wheel of Rules to determine your next competition category!" />
+          <WheelOfRules onSpinComplete={handleWheelSpinComplete} />
+        </div>
+      )}
+
+      {/* ANSWERING PHASE */}
+      {gameState === 'answering' && (
+        <div className="bright-card rounded-3xl p-6 sm:p-8 space-y-6 relative overflow-hidden shadow-xl border border-slate-200">
+          
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+              {currentQ.chapter}
+            </span>
+
+            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl">
+              <Clock className="w-4 h-4 text-amber-600" />
+              <span className="font-mono text-sm font-black text-amber-800">{timeLeft}s</span>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 leading-snug">{currentQ.title}</h3>
+          </div>
+
+          <Lifelines
+            onUse5050={handleUse5050}
+            onUsePeek={handleUsePeek}
+            onUseExtraTime={handleUseExtraTime}
+            used5050={used5050}
+            usedPeek={usedPeek}
+            usedExtraTime={usedExtraTime}
+            disabled={isAnswerSubmitted}
+          />
+
+          {showPeekCitation && currentQ.psrCitation && (
+            <div className="bg-amber-50 border border-amber-300 p-3 rounded-2xl text-xs space-y-1">
+              <span className="font-bold text-amber-900 block">PSR Citation Rule {currentQ.psrCitation.ruleNumber}:</span>
+              <p className="text-amber-800 italic">{currentQ.psrCitation.excerpt}</p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-3">
+            {currentQ.options.map((opt, idx) => {
+              if (hiddenOptionIndices.includes(idx)) return null;
+
+              const isSelected = selectedOpt === idx;
+              const isCorrect = idx === currentQ.correctAnswer;
+              let btnClass = 'bg-slate-50 border-slate-200 hover:border-slate-400 text-slate-800';
+
+              if (isAnswerSubmitted) {
+                if (isSelected) {
+                  btnClass = isCorrect ? 'bg-emerald-600 text-white border-emerald-600 font-extrabold' : 'bg-rose-600 text-white border-rose-600 font-extrabold';
+                } else if (isCorrect) {
+                  btnClass = 'bg-emerald-100 text-emerald-900 border-emerald-400 font-bold';
+                }
+              }
+
+              return (
+                <button
+                  key={idx}
+                  disabled={isAnswerSubmitted}
+                  onClick={() => handleAnswerSelect(idx)}
+                  className={`w-full text-left p-4 rounded-2xl border-2 transition-all text-xs flex items-center justify-between ${btnClass}`}
+                >
+                  <span>{opt}</span>
+                  {isAnswerSubmitted && isCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
+
+          {isAnswerSubmitted && (
+            <div className="pt-4 border-t border-slate-100 flex justify-end">
+              <button
+                onClick={handleNextQuestion}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 py-3 rounded-2xl text-xs shadow-md transition-all flex items-center gap-2"
+              >
+                <span>Next Question &amp; Spin Wheel</span>
+              </button>
+            </div>
+          )}
+
+        </div>
+      )}
+
     </div>
   );
 };

@@ -52,26 +52,29 @@ export const ScheduleTournamentPage: React.FC = () => {
 
     setIsSubmitting(true);
 
-    const newGame = await cloudDatabaseService.createGame({
-      host_id: user.id,
-      title,
-      competition_mode: competitionMode,
-      target_org: competitionMode === 'inter_agency' ? 'National Inter-Agency' : targetOrg,
-      start_datetime: new Date(startDateTime).toISOString(),
-      cutoff_datetime: new Date(cutoffDateTime).toISOString(),
-      max_players: 50,
-      status: 'scheduled',
-      description
-    });
+    try {
+      const newGame = await cloudDatabaseService.createGame({
+        host_id: user?.id || 'usr-default',
+        title,
+        competition_mode: competitionMode,
+        target_org: competitionMode === 'inter_agency' ? 'National Inter-Agency' : targetOrg,
+        start_datetime: new Date(startDateTime).toISOString(),
+        cutoff_datetime: new Date(cutoffDateTime).toISOString(),
+        max_players: 50,
+        status: 'scheduled',
+        description
+      });
 
-    if (newGame) {
-      // Auto join host to the game
-      await cloudDatabaseService.joinGame(newGame.id, user.id);
+      if (newGame) {
+        await cloudDatabaseService.joinGame(newGame.id, user?.id || 'usr-default');
+      }
+    } catch (e) {
+      console.warn('Schedule game notice:', e);
+    } finally {
       setIsModalOpen(false);
+      setIsSubmitting(false);
       await loadGames();
     }
-
-    setIsSubmitting(false);
   };
 
   const handleJoinGame = async (game: GameRecord) => {
@@ -230,7 +233,7 @@ export const ScheduleTournamentPage: React.FC = () => {
                   className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-md disabled:opacity-50"
                 >
                   {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  <span>Save &amp; Publish to Supabase DB</span>
+                  <span>Save &amp; Publish</span>
                 </button>
               </div>
             </form>
