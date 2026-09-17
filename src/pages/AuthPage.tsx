@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore';
 import { CadreRank } from '../types';
 import { FEDERAL_MINISTRIES_AND_AGENCIES } from '../data/ministriesAndAgencies';
 import { cloudDatabaseService, RegisteredMember } from '../services/supabase';
-import { ShieldCheck, Mail, Building2, Award, User, ArrowRight, Sparkles, Zap, Users, Globe, ChevronRight, Upload, Camera, CheckCircle2, KeyRound, RefreshCw, Lock, LogIn, UserPlus } from 'lucide-react';
+import { ShieldCheck, Mail, Building2, Award, User, ArrowRight, Sparkles, Zap, Users, Globe, ChevronRight, Upload, Camera, CheckCircle2, KeyRound, RefreshCw, Lock, LogIn, UserPlus, ExternalLink } from 'lucide-react';
 
 export const CURATED_AVATARS = [
   { id: 'av-1', title: 'Executive Officer Female', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200' },
@@ -17,7 +17,7 @@ export const CURATED_AVATARS = [
 export const AuthPage: React.FC = () => {
   const { loginWithDomain, setCompetitionMode, addRegisteredMember } = useStore();
 
-  // Tab State: 'signup' vs 'signin'
+  // Auth Tab: 'signup' vs 'signin'
   const [authTab, setAuthTab] = useState<'signup' | 'signin'>('signup');
 
   // Multi-step Registration State: 'form' | 'verification_pending' | 'verified_success'
@@ -103,7 +103,7 @@ export const AuthPage: React.FC = () => {
     setRegStep('verification_pending');
   };
 
-  // Complete Email Verification -> Save to Supabase Cloud DB & Grant Platform Access
+  // Complete Gmail-Style Email Verification Link/Code Activation
   const handleConfirmEmailVerification = async () => {
     setCompetitionMode('intra_dept');
     const fullOrgName = selectedAgency && selectedAgency !== `${selectedMinistry} Headquarters` 
@@ -135,14 +135,14 @@ export const AuthPage: React.FC = () => {
 
     setTimeout(() => {
       loginWithDomain(email, name, fullOrgName, selectedCadre, department || 'Administration', finalAvatar);
-    }, 1500);
+    }, 1200);
   };
 
   const handleResendLink = () => {
     setIsResending(true);
     setTimeout(() => {
       setIsResending(false);
-      setVerificationMessage(`Verification link resent to ${email}! Check your inbox.`);
+      setVerificationMessage(`Verification email link resent to ${email}!`);
       setTimeout(() => setVerificationMessage(null), 4000);
     }, 1000);
   };
@@ -153,7 +153,7 @@ export const AuthPage: React.FC = () => {
     setSignInError(null);
 
     if (!signInEmail || !signInPassword) {
-      setSignInError('Please provide your email address and password.');
+      setSignInError('Please enter your email address and password.');
       return;
     }
 
@@ -183,7 +183,7 @@ export const AuthPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 lg:p-8 font-sans">
       <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-12 bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden">
         
         {/* Left Branding Banner */}
@@ -276,7 +276,7 @@ export const AuthPage: React.FC = () => {
                 <form onSubmit={handleSignUpSubmit} className="space-y-4 animate-fadeIn">
                   <div>
                     <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Officer Account Registration</h2>
-                    <p className="text-xs text-slate-500 mt-1">Fill in your details. Registration completes after email confirmation.</p>
+                    <p className="text-xs text-slate-500 mt-1">Fill in your details. Registration completes via email verification link.</p>
                   </div>
 
                   {/* FULL NAME */}
@@ -488,7 +488,7 @@ export const AuthPage: React.FC = () => {
                 </form>
               )}
 
-              {/* EMAIL CONFIRMATION LINK & CODE SCREEN */}
+              {/* GMAIL-STYLE EMAIL CONFIRMATION LINK & CODE SCREEN */}
               {regStep === 'verification_pending' && (
                 <div className="space-y-6 animate-fadeIn text-center py-4">
                   <div className="w-16 h-16 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-700 flex items-center justify-center mx-auto shadow-md">
@@ -496,9 +496,12 @@ export const AuthPage: React.FC = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <h2 className="text-2xl font-black text-slate-900">Check Email to Activate Account</h2>
+                    <span className="text-[10px] font-extrabold uppercase px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                      GMAIL / STANDARD EMAIL VERIFICATION
+                    </span>
+                    <h2 className="text-2xl font-black text-slate-900 mt-1">Verification Link Sent to Email</h2>
                     <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
-                      We sent an official registration confirmation link and 6-digit activation code to:
+                      We sent an official confirmation activation link and 6-digit security code to your inbox:
                     </p>
                     <div className="bg-slate-100 text-emerald-800 font-mono font-bold text-xs px-4 py-2 rounded-xl border border-slate-200 inline-block shadow-sm">
                       {email}
@@ -512,12 +515,28 @@ export const AuthPage: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="bg-slate-50 border border-slate-200 p-5 rounded-3xl space-y-4 max-w-md mx-auto text-left">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                        <span>Enter 6-Digit Activation Code</span>
-                        <span className="text-[10px] text-slate-500 font-normal">From email link or inbox</span>
-                      </label>
+                  <div className="bg-slate-50 border border-slate-200 p-6 rounded-3xl space-y-4 max-w-md mx-auto text-left shadow-sm">
+                    {/* DIRECT EMAIL VERIFICATION LINK BUTTON */}
+                    <div className="space-y-2">
+                      <span className="block text-xs font-bold text-slate-700">Option 1: Direct Email Link Activation</span>
+                      <button
+                        type="button"
+                        onClick={handleConfirmEmailVerification}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 border border-emerald-500"
+                      >
+                        <ExternalLink className="w-4 h-4 text-amber-300" />
+                        <span>👉 Click Email Verification Link (Complete Registration)</span>
+                      </button>
+                    </div>
+
+                    <div className="relative flex py-1 items-center">
+                      <div className="flex-grow border-t border-slate-200"></div>
+                      <span className="flex-shrink mx-2 text-[10px] text-slate-400 font-bold uppercase">OR ENTER SECURITY CODE</span>
+                      <div className="flex-grow border-t border-slate-200"></div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-slate-700">Option 2: 6-Digit Security Code</label>
                       <div className="relative">
                         <KeyRound className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
                         <input
@@ -525,22 +544,13 @@ export const AuthPage: React.FC = () => {
                           maxLength={6}
                           value={verificationCode}
                           onChange={(e) => setVerificationCode(e.target.value)}
-                          className="w-full bg-white border-2 border-emerald-500 rounded-xl pl-10 pr-4 py-2.5 font-mono text-center text-lg font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 shadow-inner"
+                          className="w-full bg-white border-2 border-emerald-500 rounded-xl pl-10 pr-4 py-2 font-mono text-center text-lg font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 shadow-inner"
                         />
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={handleConfirmEmailVerification}
-                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2"
-                    >
-                      <CheckCircle2 className="w-4 h-4 text-amber-300" />
-                      <span>Click Link / Verify &amp; Complete Registration</span>
-                    </button>
-
                     <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
-                      <span className="text-slate-500">Didn't receive email?</span>
+                      <span className="text-slate-500">Didn't receive email link?</span>
                       <button
                         type="button"
                         onClick={handleResendLink}
@@ -563,7 +573,7 @@ export const AuthPage: React.FC = () => {
                   </div>
                   <h2 className="text-2xl font-black text-slate-900">Email Verified &amp; Registration Complete!</h2>
                   <p className="text-xs text-slate-600 max-w-sm mx-auto">
-                    Your account has been saved to the Cloud Database. Logging you into the platform now...
+                    Your officer profile has been saved to the Cloud Database. Entering the platform...
                   </p>
                 </div>
               )}
