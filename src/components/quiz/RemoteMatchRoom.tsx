@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../../store/useStore';
 import { Question } from '../../types';
-import { Trophy, Users, ShieldCheck, CheckCircle2, Play, Zap, Globe, MapPin, Copy, Check, ArrowRight, Swords } from 'lucide-react';
+import { cloudDatabaseService, RegisteredMember } from '../../services/supabase';
+import { Trophy, Users, ShieldCheck, CheckCircle2, Play, Zap, Globe, MapPin, Copy, Check, ArrowRight, Swords, Search, UserCheck, Sparkles } from 'lucide-react';
 
 export const RemoteMatchRoom: React.FC = () => {
   const { questions, recordQuizResult, setActivePage, user } = useStore();
@@ -15,17 +16,75 @@ export const RemoteMatchRoom: React.FC = () => {
   const [isFinished, setIsFinished] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  // Simulated Remote Player Status
+  // Registered Members Directory State
+  const [members, setMembers] = useState<RegisteredMember[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedMember, setSelectedMember] = useState<RegisteredMember | null>(null);
+
+  // Remote Player Opponent State
   const [remotePlayer, setRemotePlayer] = useState({
-    name: 'Dr. Samuel Ojo',
-    title: 'Deputy Director (GL 16)',
-    mdaName: 'NACETEM (Lagos Office)',
-    location: 'Lagos Branch, Nigeria',
+    id: 'usr-02',
+    name: 'Dr. Stella Okonkwo',
+    title: 'Director (GL 17)',
+    mdaName: 'Federal Ministry of Finance',
+    location: 'Revenue & Budget, Abuja',
+    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200',
     score: 0,
     status: 'Connected',
     answersCount: 0,
     isAnswering: false
   });
+
+  // Load Registered Members from Supabase Cloud DB
+  useEffect(() => {
+    const loadMembers = async () => {
+      const fetched = await cloudDatabaseService.fetchRegisteredMembers();
+      if (fetched && fetched.length > 0) {
+        setMembers(fetched);
+      }
+    };
+    loadMembers();
+  }, []);
+
+  const filteredMembers = members.filter(m => 
+    m.id !== user?.id &&
+    (m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+     m.mdaName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+     m.department.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
+
+  const handleSelectMemberOpponent = async (member: RegisteredMember) => {
+    setSelectedMember(member);
+    setRemotePlayer({
+      id: member.id,
+      name: member.name,
+      title: member.cadre,
+      mdaName: member.mdaName,
+      location: `${member.department}, Nigeria`,
+      avatar: member.avatar,
+      score: 0,
+      status: 'Connected',
+      answersCount: 0,
+      isAnswering: false
+    });
+
+    if (user) {
+      await cloudDatabaseService.sendDuelChallenge({
+        id: `duel-${Date.now()}`,
+        challengerId: user.id,
+        challengerName: user.name,
+        challengerMda: user.mdaName,
+        challengerAvatar: user.avatar,
+        defenderId: member.id,
+        defenderName: member.name,
+        defenderMda: member.mdaName,
+        defenderAvatar: member.avatar,
+        status: 'accepted',
+        stageNumber: 2,
+        createdAt: new Date().toISOString()
+      });
+    }
+  };
 
   const currentQ = duelQuestions[currentIdx] || duelQuestions[0];
 
@@ -91,7 +150,7 @@ export const RemoteMatchRoom: React.FC = () => {
               {isUserWinner ? '🏆 Victory! You Won the Remote Duel!' : '🤝 Great Match! Remote Match Complete'}
             </h2>
             <p className="text-xs text-slate-600 max-w-lg mx-auto mt-1">
-              Synchronized 2-Player Scheduled Match between <strong>NACETEM HQ (Abuja)</strong> &amp; <strong>NACETEM Branch (Lagos)</strong>.
+              Synchronized 2-Player Match between <strong>{user?.name} ({user?.mdaName})</strong> &amp; <strong>{remotePlayer.name} ({remotePlayer.mdaName})</strong>.
             </p>
           </div>
 
@@ -103,13 +162,13 @@ export const RemoteMatchRoom: React.FC = () => {
                 {isUserWinner && <span className="bg-emerald-600 text-white text-[10px] font-black px-2 py-0.5 rounded">WINNER</span>}
               </div>
               <h4 className="font-extrabold text-slate-900 text-sm">{user?.name}</h4>
-              <p className="text-xs text-slate-500">{user?.department} • NACETEM HQ</p>
+              <p className="text-xs text-slate-500">{user?.department} • {user?.mdaName}</p>
               <div className="mt-3 text-2xl font-black text-emerald-700">{userScore} XP</div>
             </div>
 
             <div className={`p-5 rounded-2xl border ${!isUserWinner ? 'bg-amber-50 border-amber-400 ring-2 ring-amber-500' : 'bg-slate-50 border-slate-200'}`}>
               <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-extrabold text-slate-700 uppercase">Remote Player 2</span>
+                <span className="text-xs font-extrabold text-slate-700 uppercase">Remote Opponent</span>
                 {!isUserWinner && <span className="bg-amber-600 text-white text-[10px] font-black px-2 py-0.5 rounded">WINNER</span>}
               </div>
               <h4 className="font-extrabold text-slate-900 text-sm">{remotePlayer.name}</h4>
@@ -138,24 +197,26 @@ export const RemoteMatchRoom: React.FC = () => {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8 space-y-6 animate-fadeIn">
+    <div className="max-w-6xl mx-auto px-4 py-8 space-y-8 animate-fadeIn">
       
       {/* REMOTE MATCH ROOM HEADER */}
-      <div className="bg-gradient-to-r from-emerald-800 via-emerald-900 to-slate-900 p-6 rounded-3xl text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-4">
-        <div className="space-y-1">
+      <div className="bg-gradient-to-r from-emerald-800 via-emerald-900 to-slate-900 p-6 sm:p-8 rounded-3xl text-white shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
+        <div className="space-y-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-emerald-200 text-xs font-extrabold">
             <Globe className="w-3.5 h-3.5" />
-            <span>REMOTE 2-PLAYER MATCH ROOM • SYNCHRONIZED MATCHMAKING</span>
+            <span>REMOTE 2-PLAYER MATCH ROOM • SYNCHRONIZED CLOUD MATCHMAKING</span>
           </div>
-          <h2 className="text-2xl font-extrabold">Scheduled Head-to-Head Matchroom</h2>
-          <p className="text-xs text-emerald-100">Live 2-Player battle between remote offices &amp; agencies across Nigeria.</p>
+          <h2 className="text-3xl font-extrabold">Scheduled Head-to-Head Duel Hub</h2>
+          <p className="text-xs text-emerald-100 max-w-2xl">
+            Select an officer from the live registered civil servants directory across all Federal Ministries to launch a remote duel.
+          </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-white/10 border border-white/20 p-2.5 rounded-2xl">
+        <div className="flex items-center gap-2 bg-white/10 border border-white/20 p-3 rounded-2xl shrink-0">
           <span className="text-xs font-mono font-bold text-amber-300">MATCH-CODE: NACETEM-DUEL-8942</span>
           <button
             onClick={handleCopyMatchCode}
-            className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white transition-all"
+            className="p-2 rounded-xl bg-white/20 hover:bg-white/30 text-white transition-all"
             title="Copy Match Invite Link"
           >
             {copiedLink ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
@@ -163,22 +224,93 @@ export const RemoteMatchRoom: React.FC = () => {
         </div>
       </div>
 
+      {/* REGISTERED MEMBERS DIRECTORY SELECTOR */}
+      <div className="bright-card p-6 rounded-3xl space-y-4 border border-slate-200 shadow-md">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Users className="w-5 h-5 text-emerald-600" />
+              <span>Select Opponent from Live Registered Members ({members.length})</span>
+            </h3>
+            <p className="text-xs text-slate-500">Pick any registered officer across 33 Federal Ministries &amp; Agencies to challenge.</p>
+          </div>
+
+          <div className="relative max-w-xs w-full">
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search officer or MDA..."
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-emerald-600"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {filteredMembers.map((member) => {
+            const isSelected = remotePlayer.id === member.id;
+
+            return (
+              <div
+                key={member.id}
+                className={`p-4 rounded-2xl border transition-all space-y-3 flex flex-col justify-between ${
+                  isSelected 
+                    ? 'bg-emerald-50/80 border-emerald-500 ring-2 ring-emerald-500' 
+                    : 'bg-white border-slate-200 hover:border-emerald-300 hover:shadow-sm'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <img
+                    src={member.avatar}
+                    alt={member.name}
+                    className="w-12 h-12 rounded-2xl object-cover border border-emerald-200 shrink-0"
+                  />
+                  <div className="space-y-0.5 overflow-hidden">
+                    <div className="flex items-center gap-1.5">
+                      <h4 className="font-extrabold text-slate-900 text-xs truncate">{member.name}</h4>
+                      {member.isOnline && (
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0" title="Online" />
+                      )}
+                    </div>
+                    <p className="text-[11px] text-emerald-800 font-semibold truncate">{member.cadre}</p>
+                    <p className="text-[10px] text-slate-500 truncate">{member.mdaName}</p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => handleSelectMemberOpponent(member)}
+                  className={`w-full py-2 px-3 rounded-xl text-xs font-extrabold flex items-center justify-center gap-1.5 transition-all ${
+                    isSelected
+                      ? 'bg-emerald-700 text-white shadow-md'
+                      : 'bg-slate-100 hover:bg-emerald-600 hover:text-white text-slate-800'
+                  }`}
+                >
+                  <Swords className="w-3.5 h-3.5 text-amber-300" />
+                  <span>{isSelected ? 'Active Selected Opponent' : 'Challenge to Duel'}</span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* 2-PLAYER REMOTE CONNECTIONS DISPLAY */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Player 1 (You) */}
-        <div className="bg-emerald-50 border-2 border-emerald-500 p-4 rounded-2xl space-y-2 relative">
+        <div className="bg-emerald-50 border-2 border-emerald-500 p-5 rounded-3xl space-y-3 relative shadow-md">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded bg-emerald-600 text-white">
               PLAYER 1 (HOST / YOU)
             </span>
             <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-              🟢 Connected (Abuja HQ)
+              🟢 Connected ({user?.mdaName || 'HQ'})
             </span>
           </div>
 
           <div className="flex items-center gap-3">
-            <img src={user?.avatar} alt={user?.name} className="w-10 h-10 rounded-full object-cover ring-2 ring-emerald-600" />
+            <img src={user?.avatar} alt={user?.name} className="w-12 h-12 rounded-2xl object-cover ring-2 ring-emerald-600" />
             <div>
               <h4 className="font-black text-slate-900 text-sm">{user?.name}</h4>
               <p className="text-xs text-slate-500">{user?.cadre} • {user?.department}</p>
@@ -192,7 +324,7 @@ export const RemoteMatchRoom: React.FC = () => {
         </div>
 
         {/* Player 2 (Remote Opponent) */}
-        <div className="bg-slate-50 border-2 border-slate-300 p-4 rounded-2xl space-y-2 relative">
+        <div className="bg-slate-50 border-2 border-slate-300 p-5 rounded-3xl space-y-3 relative shadow-md">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded bg-slate-900 text-white">
               PLAYER 2 (REMOTE OPPONENT)
@@ -204,9 +336,7 @@ export const RemoteMatchRoom: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-teal-700 text-white font-extrabold flex items-center justify-center text-sm shadow">
-              SO
-            </div>
+            <img src={remotePlayer.avatar} alt={remotePlayer.name} className="w-12 h-12 rounded-2xl object-cover ring-2 ring-teal-600" />
             <div>
               <h4 className="font-black text-slate-900 text-sm">{remotePlayer.name}</h4>
               <p className="text-xs text-slate-500">{remotePlayer.title} • {remotePlayer.mdaName}</p>
@@ -216,7 +346,7 @@ export const RemoteMatchRoom: React.FC = () => {
           <div className="flex items-center justify-between pt-2 border-t border-slate-200 text-xs font-bold text-slate-800">
             <span>Score: <strong className="text-base text-slate-900">{remotePlayer.score} XP</strong></span>
             <span className="text-emerald-700 font-semibold flex items-center gap-1">
-              <Zap className="w-3 h-3 text-amber-500 fill-amber-500" /> Remote Live Progress: {remotePlayer.answersCount}/{duelQuestions.length}
+              <Zap className="w-3 h-3 text-amber-500 fill-amber-500" /> Remote Progress: {remotePlayer.answersCount}/{duelQuestions.length}
             </span>
           </div>
         </div>

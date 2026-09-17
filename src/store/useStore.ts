@@ -45,9 +45,14 @@ interface AppState {
   chapterAnalytics: ChapterAnalytics[];
   userAttempts: QuizAttempt[];
 
-  // Practice State
+  // Practice & Matchmaking State
   activePracticeChapter: string | null;
   setActivePracticeChapter: (chapter: string | null) => void;
+  registeredMembers: any[];
+  setRegisteredMembers: (members: any[]) => void;
+  addRegisteredMember: (member: any) => void;
+  selectedOpponent: any | null;
+  setSelectedOpponent: (opponent: any | null) => void;
 
   // Actions
   loginWithDomain: (email: string, name: string, mdaName: string, cadre: any, department?: string, avatar?: string) => void;
@@ -88,9 +93,15 @@ export const useStore = create<AppState>((set, get) => ({
 
   activePracticeChapter: null,
   setActivePracticeChapter: (chapter) => set({ activePracticeChapter: chapter }),
+  registeredMembers: [],
+  setRegisteredMembers: (members) => set({ registeredMembers: members }),
+  addRegisteredMember: (member) => set(state => ({ registeredMembers: [member, ...state.registeredMembers] })),
+  selectedOpponent: null,
+  setSelectedOpponent: (opponent) => set({ selectedOpponent: opponent }),
 
   loginWithDomain: (email, name, mdaName, cadre, department = 'Administration', avatar) => {
     const isGov = email.endsWith('.gov.ng') || email.endsWith('.gov') || email.includes('@gov');
+    const defaultAvatar = avatar || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200';
     const newUser: UserProfile = {
       id: `usr-${Date.now()}`,
       name: name || 'Civil Servant',
@@ -100,7 +111,7 @@ export const useStore = create<AppState>((set, get) => ({
       mdaName: mdaName || 'Federal Ministry of Finance',
       department: department || 'Finance & Administration',
       cadre: cadre || 'Senior Executive Officer (GL 10)',
-      avatar: avatar || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200',
+      avatar: defaultAvatar,
       careerXP: isGov ? 1200 : 500,
       tier: isGov ? 'Bureau Specialist' : 'Civil Cadet',
       tournamentPasses: 3,
