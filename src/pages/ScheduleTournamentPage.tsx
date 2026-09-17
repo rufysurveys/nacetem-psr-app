@@ -1,86 +1,90 @@
 import React, { useState, useEffect } from 'react';
-import { useStore, ScheduledTournamentItem } from '../store/useStore';
-import { cloudSyncService, DEFAULT_SCHEDULED_TOURNAMENTS } from '../services/cloudSync';
-import { Calendar, Clock, Trophy, Users, CheckCircle2, Plus, Globe, Building2, Sparkles, Award, Swords, RefreshCw } from 'lucide-react';
+import { useStore } from '../store/useStore';
+import { supabase, cloudDatabaseService, GameRecord } from '../services/supabase';
+import { Calendar, Clock, Trophy, Users, CheckCircle2, Plus, Globe, Building2, Sparkles, RefreshCw } from 'lucide-react';
 
 export const ScheduleTournamentPage: React.FC = () => {
-  const { user, scheduledTournaments, addScheduledTournament, subscribeToTournament, setScheduledTournaments, setActivePage } = useStore();
+  const { user, setActivePage, setSelectedOpponent } = useStore();
 
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [games, setGames] = useState<GameRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Real-time Cloud Sync across devices
-  const syncTournaments = async () => {
-    setIsSyncing(true);
-    const remoteList = await cloudSyncService.fetchCloudTournaments();
-    if (remoteList && remoteList.length > 0) {
-      // Merge remote tournaments with local state
-      const currentList = useStore.getState().scheduledTournaments;
-      const mergedMap = new Map<string, ScheduledTournamentItem>();
-      
-      currentList.forEach(item => mergedMap.set(item.id, item));
-      remoteList.forEach(item => mergedMap.set(item.id, item));
-
-      const sortedMerged = Array.from(mergedMap.values());
-      setScheduledTournaments(sortedMerged.length > 0 ? sortedMerged : DEFAULT_SCHEDULED_TOURNAMENTS);
-    } else {
-      const currentList = useStore.getState().scheduledTournaments;
-      if (!currentList || currentList.length === 0) {
-        setScheduledTournaments(DEFAULT_SCHEDULED_TOURNAMENTS);
-      }
-    }
-    setIsSyncing(false);
+  // Fetch games from Supabase cloud database
+  const loadGames = async () => {
+    setIsLoading(true);
+    const remoteGames = await cloudDatabaseService.fetchAvailableGames();
+    setGames(remoteGames);
+    setIsLoading(false);
   };
 
   useEffect(() => {
-    // Initial fetch
-    syncTournaments();
+    loadGames();
 
-    // BroadcastChannel local multi-tab listener
-    cloudSyncService.onBroadcastUpdate((items) => {
-      setScheduledTournaments(items);
-    });
-
-    // Auto-poll every 2.0 seconds for instant 2-device remote sync (Abuja <-> Lagos)
-    const intervalId = setInterval(syncTournaments, 2000);
+    // Supabase Realtime Channel: Listen for games INSERT/UPDATE across devices (Lagos <-> Abuja)
+    const gamesChannel = supabase
+      .channel('public:games')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'games' },
+        () => {
+          loadGames();
+        }
+      )
+      .subscribe();
 
     return () => {
-      clearInterval(intervalId);
+      supabase.removeChannel(gamesChannel);
     };
-  }, [setScheduledTournaments]);
+  }, []);
 
-
-  const [title, setTitle] = useState('2026 NACETEM Inter-Departmental Championship');
+  const [title, setTitle] = useState('2026 PSR Inter-Agency Championship');
   const [competitionMode, setCompMode] = useState<'intra_dept' | 'inter_agency'>('intra_dept');
   const [targetOrg, setTargetOrg] = useState('National Centre for Technology Management (NACETEM)');
   const [startDateTime, setStartDateTime] = useState('2026-09-22T10:00');
   const [cutoffDateTime, setCutoffDateTime] = useState('2026-09-21T23:59');
-  const [badgeTitle, setBadgeTitle] = useState('🏆 2026 NACETEM Inter-Dept Champion Trophy');
-  const [description, setDescription] = useState('Official 3-stage competition testing Public Service Rules mastery across departments.');
+  const [description, setDescription] = useState('Official competition testing Public Service Rules mastery across federal agencies.');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleCreateSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newItem: ScheduledTournamentItem = {
-      id: `sched-${Date.now()}`,
+    if (!user) return;
+
+    setIsSubmitting(true);
+
+    const newGame = await cloudDatabaseService.createGame({
+      host_id: user.id,
       title,
-      competitionMode,
-      targetOrg: competitionMode === 'inter_agency' ? 'National Inter-Agency' : targetOrg,
-      startDateTime,
-      cutoffDateTime,
-      winnerBadgeTitle: badgeTitle,
-      registeredCount: 1,
-      isSubscribed: true,
-      createdBy: user?.name ? `${user.name} (${user.mdaName || 'NACETEM'})` : 'Administrator',
+      competition_mode: competitionMode,
+      target_org: competitionMode === 'inter_agency' ? 'National Inter-Agency' : targetOrg,
+      start_datetime: new Date(startDateTime).toISOString(),
+      cutoff_datetime: new Date(cutoffDateTime).toISOString(),
+      max_players: 50,
+      status: 'scheduled',
       description
-    };
-    addScheduledTournament(newItem);
-    setIsModalOpen(false);
-    
-    // Publish immediately to global cloud
-    await cloudSyncService.publishScheduledTournament(newItem);
-    await syncTournaments();
+    });
+
+    if (newGame) {
+      // Auto join host to the game
+      await cloudDatabaseService.joinGame(newGame.id, user.id);
+      setIsModalOpen(false);
+      await loadGames();
+    }
+
+    setIsSubmitting(false);
   };
 
+  const handleJoinGame = async (game: GameRecord) => {
+    if (!user) return;
+    await cloudDatabaseService.joinGame(game.id, user.id);
+    setSelectedOpponent({
+      gameId: game.id,
+      title: game.title,
+      targetOrg: game.target_org,
+      competitionMode: game.competition_mode
+    });
+    setActivePage('remotematch');
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fadeIn">
@@ -91,25 +95,24 @@ export const ScheduleTournamentPage: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2 mb-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-bold">
               <Calendar className="w-3.5 h-3.5" />
-              <span>TOURNAMENT SCHEDULING & SUBSCRIPTION HUB</span>
+              <span>TOURNAMENT SCHEDULING &amp; REALTIME HUB</span>
             </div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[11px] font-bold">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-              <span>Live Global Sync Active</span>
+              <span>Supabase Realtime Channel Active</span>
             </div>
             <button
-              onClick={syncTournaments}
-              title="Force Refresh Remote Schedules"
+              onClick={loadGames}
+              title="Refresh Remote Schedules"
               className="p-1 rounded-full bg-white/10 hover:bg-white/20 text-emerald-300 transition-all flex items-center justify-center"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
 
-
-          <h1 className="text-3xl sm:text-4xl font-extrabold">Scheduled Tournaments</h1>
+          <h1 className="text-3xl sm:text-4xl font-extrabold">Scheduled Competitions</h1>
           <p className="text-xs text-emerald-100 mt-1 max-w-2xl">
-            Schedule future Inter-Agency & Inter-Departmental competitions with date & time filters, or subscribe to upcoming events to reserve your competitive seat.
+            Schedule future Inter-Agency &amp; Inter-Departmental competitions. Created games synchronize in real-time across all devices via Supabase PostgreSQL.
           </p>
         </div>
 
@@ -130,9 +133,9 @@ export const ScheduleTournamentPage: React.FC = () => {
               <div>
                 <h3 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-emerald-600" />
-                  <span>Schedule Competition Event</span>
+                  <span>Schedule Central Competition</span>
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">Set the exact date, time, and rules for officers to subscribe.</p>
+                <p className="text-xs text-slate-500 mt-0.5">Inserts game record into Supabase central database.</p>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
@@ -150,20 +153,20 @@ export const ScheduleTournamentPage: React.FC = () => {
                   required
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 font-medium text-slate-900 focus:outline-none focus:border-emerald-600"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-emerald-600"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Competition Scope</label>
+                  <label className="block font-bold text-slate-700 mb-1">Competition Mode</label>
                   <select
                     value={competitionMode}
                     onChange={(e) => setCompMode(e.target.value as any)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 font-semibold text-slate-800 focus:outline-none focus:border-emerald-600"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-emerald-600"
                   >
-                    <option value="intra_dept">Intra-Agency (Inter-Dept)</option>
-                    <option value="inter_agency">Inter-Agency (National)</option>
+                    <option value="intra_dept">Inter-Departmental Challenge</option>
+                    <option value="inter_agency">Inter-Agency Championship</option>
                   </select>
                 </div>
 
@@ -171,79 +174,63 @@ export const ScheduleTournamentPage: React.FC = () => {
                   <label className="block font-bold text-slate-700 mb-1">Target Organization</label>
                   <input
                     type="text"
-                    disabled={competitionMode === 'inter_agency'}
-                    value={competitionMode === 'inter_agency' ? 'National All Agencies' : targetOrg}
+                    required
+                    value={targetOrg}
                     onChange={(e) => setTargetOrg(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 font-medium text-slate-900 focus:outline-none"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-emerald-600"
                   />
                 </div>
               </div>
 
-              {/* DATE AND TIME PICKER FEATURES */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-emerald-50/60 p-3.5 rounded-2xl border border-emerald-200">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-extrabold text-emerald-900 mb-1 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-emerald-700" />
-                    <span>Tournament Start Date & Time</span>
-                  </label>
+                  <label className="block font-bold text-slate-700 mb-1">Start Date &amp; Time</label>
                   <input
                     type="datetime-local"
                     required
                     value={startDateTime}
                     onChange={(e) => setStartDateTime(e.target.value)}
-                    className="w-full bg-white border border-emerald-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-emerald-600"
                   />
                 </div>
 
                 <div>
-                  <label className="block font-extrabold text-emerald-900 mb-1 flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-emerald-700" />
-                    <span>Registration Cutoff Date & Time</span>
-                  </label>
+                  <label className="block font-bold text-slate-700 mb-1">Registration Cutoff</label>
                   <input
                     type="datetime-local"
                     required
                     value={cutoffDateTime}
                     onChange={(e) => setCutoffDateTime(e.target.value)}
-                    className="w-full bg-white border border-emerald-300 rounded-xl px-3 py-2 text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-emerald-600"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Winner Badge / Trophy Title</label>
-                <input
-                  type="text"
-                  required
-                  value={badgeTitle}
-                  onChange={(e) => setBadgeTitle(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-900 focus:outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Description & Guidelines</label>
+                <label className="block font-bold text-slate-700 mb-1">Tournament Description</label>
                 <textarea
                   rows={2}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-medium text-slate-900 focus:outline-none"
-                />
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-emerald-600"
+                ></textarea>
               </div>
 
-              <div className="pt-3 flex gap-3">
+              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition-all"
+                  className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl font-bold hover:bg-slate-200"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-2.5 rounded-xl shadow-md transition-all"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-md disabled:opacity-50"
                 >
-                  Publish Schedule
+                  {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  <span>Save &amp; Publish to Supabase DB</span>
                 </button>
               </div>
             </form>
@@ -251,141 +238,73 @@ export const ScheduleTournamentPage: React.FC = () => {
         </div>
       )}
 
-      {/* SCHEDULED TOURNAMENTS LIST */}
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-            <Clock className="w-5 h-5 text-emerald-600" />
-            <span>Upcoming Scheduled Competitions ({scheduledTournaments.length})</span>
-          </h2>
-          <span className="text-xs text-slate-500 font-medium">Subscribe now to reserve your entry pass</span>
+      {/* GAMES GRID */}
+      {isLoading ? (
+        <div className="py-12 text-center text-slate-500 flex flex-col items-center gap-2">
+          <RefreshCw className="w-6 h-6 animate-spin text-emerald-600" />
+          <span>Querying Supabase central games table...</span>
         </div>
-
-        {scheduledTournaments.length === 0 ? (
-          <div className="bright-card p-8 rounded-3xl text-center space-y-4 border border-slate-200">
-            <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto border border-amber-300">
-              <Calendar className="w-8 h-8" />
-            </div>
-            <div>
-              <h3 className="text-xl font-extrabold text-slate-900">No Scheduled Competitions Yet</h3>
-              <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
-                No future competitions are scheduled at the moment. You can schedule a new competition or restore default competitions.
-              </p>
-            </div>
-            <div className="flex flex-wrap justify-center gap-3 pt-2">
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs shadow-md transition-all flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>+ Schedule New Tournament</span>
-              </button>
-              <button
-                onClick={() => setScheduledTournaments(DEFAULT_SCHEDULED_TOURNAMENTS)}
-                className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-5 py-2.5 rounded-xl text-xs transition-all flex items-center gap-2"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                <span>Restore Default Competitions</span>
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {scheduledTournaments.map((tourn) => {
-              const formattedStart = new Date(tourn.startDateTime).toLocaleString('en-US', {
-                weekday: 'short',
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-              });
-
-              return (
-                <div 
-                  key={tourn.id} 
-                  className={`bright-card p-6 rounded-3xl space-y-4 flex flex-col justify-between border-slate-200 ${
-                    tourn.isSubscribed ? 'ring-2 ring-emerald-500 bg-emerald-50/30' : ''
-                  }`}
-                >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={`text-[10px] font-extrabold uppercase px-3 py-1 rounded-lg ${
-                      tourn.competitionMode === 'inter_agency'
-                        ? 'bg-teal-100 text-teal-800 border border-teal-300'
-                        : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                    }`}>
-                      {tourn.competitionMode === 'inter_agency' ? '🌐 Inter-Agency League' : '🏢 Intra-Org Challenge'}
-                    </span>
-
-                    <span className="text-xs font-extrabold text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200 flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> Scheduled
-                    </span>
-                  </div>
-
-                  <div>
-                    <h3 className="text-xl font-extrabold text-slate-900">{tourn.title}</h3>
-                    <p className="text-xs text-slate-500 font-semibold mt-0.5">Target: {tourn.targetOrg}</p>
-                  </div>
-
-                  {/* SCHEDULED DATE & TIME BANNER */}
-                  <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-2xl space-y-1.5 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500 font-medium">Scheduled Start Date & Time:</span>
-                      <span className="font-extrabold text-emerald-800 font-mono">{formattedStart}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-slate-500">Organizer:</span>
-                      <span className="font-bold text-slate-700">{tourn.createdBy}</span>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-600 leading-relaxed">
-                    {tourn.description}
-                  </p>
-
-                  <div className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-slate-100/70 p-2.5 rounded-xl">
-                    <Award className="w-4 h-4 text-amber-600 shrink-0" />
-                    <span>Reward: <strong>{tourn.winnerBadgeTitle}</strong></span>
-                  </div>
+      ) : games.length === 0 ? (
+        <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 space-y-4 shadow-sm">
+          <Calendar className="w-12 h-12 text-slate-300 mx-auto" />
+          <h3 className="text-lg font-bold text-slate-800">No Scheduled Tournaments Yet</h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto">
+            Click "Schedule New Tournament" above to create the first competition in the central database.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {games.map((g) => (
+            <div
+              key={g.id}
+              className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+            >
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    {g.competition_mode === 'inter_agency' ? 'National Inter-Agency' : 'Inter-Departmental'}
+                  </span>
+                  <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                    <Users className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Max {g.max_players} Players</span>
+                  </span>
                 </div>
 
-                <div className="pt-2 flex items-center justify-between gap-4 border-t border-slate-100">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
-                    <Users className="w-4 h-4 text-emerald-600" />
-                    <span>{tourn.registeredCount.toLocaleString()} Subscribed</span>
-                  </div>
+                <h3 className="text-lg font-extrabold text-slate-900">{g.title}</h3>
+                <p className="text-xs text-slate-600 leading-relaxed">{g.description || 'Public Service Rules Competition'}</p>
 
-                  {tourn.isSubscribed ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="bg-emerald-600 text-white font-extrabold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 shadow-sm">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-white" />
-                        <span>Subscribed & Reserved</span>
-                      </span>
-                      <button
-                        onClick={() => setActivePage('remotematch')}
-                        className="bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold px-3 py-1.5 rounded-xl text-xs transition-all shadow flex items-center gap-1"
-                      >
-                        <Swords className="w-3.5 h-3.5 text-amber-300" />
-                        <span>Play 2-Player Remote Duel</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => subscribeToTournament(tourn.id)}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs shadow-md transition-all flex items-center gap-1.5"
-                    >
-                      <Sparkles className="w-4 h-4 text-amber-300" />
-                      <span>Subscribe / Apply to Join</span>
-                    </button>
-                  )}
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between text-slate-700 font-medium">
+                    <span className="flex items-center gap-1 text-slate-500">
+                      <Clock className="w-3.5 h-3.5 text-amber-500" /> Start Date:
+                    </span>
+                    <strong className="text-slate-900">{new Date(g.start_datetime).toLocaleString()}</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-slate-700 font-medium">
+                    <span className="flex items-center gap-1 text-slate-500">
+                      <Building2 className="w-3.5 h-3.5 text-emerald-600" /> Target Org:
+                    </span>
+                    <strong className="text-slate-900 truncate max-w-[200px]">{g.target_org}</strong>
+                  </div>
                 </div>
               </div>
-            );
-          })}
+
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-4">
+                <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                  <Sparkles className="w-3.5 h-3.5" /> Status: {g.status.toUpperCase()}
+                </span>
+                <button
+                  onClick={() => handleJoinGame(g)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Join Match / Enter Lobby</span>
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
-        )}
-      </div>
+      )}
 
     </div>
   );

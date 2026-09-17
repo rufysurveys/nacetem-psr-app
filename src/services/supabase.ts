@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Environment credentials with fallback placeholders for initial connection setup
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://your-project-ref.supabase.co';
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-actual-supabase-anon-key';
+// Production Supabase Cloud Credentials
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://ksothbeqmxguyxygfzeu.supabase.co';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtzb3RoYmVxbXhndXl4eWdmemV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2NTQ0NTMsImV4cCI6MjEwNTIzMDQ1M30.l_1-5oXTboiOYvyVIcBrMMr_ASdApSnUAqsP-LUs2Kc';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {

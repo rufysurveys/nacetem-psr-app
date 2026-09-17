@@ -182,8 +182,11 @@ CREATE POLICY "Player update self status"
 -- QUESTIONS POLICIES
 CREATE POLICY "Authenticated read questions"
   ON public.questions FOR SELECT
-  TO authenticated
   USING (true);
+
+CREATE POLICY "Public insert questions"
+  ON public.questions FOR INSERT
+  WITH CHECK (true);
 
 -- GAME QUESTIONS POLICIES
 CREATE POLICY "Authenticated read game_questions"

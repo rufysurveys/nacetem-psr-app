@@ -2,8 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import { CadreRank } from '../types';
 import { FEDERAL_MINISTRIES_AND_AGENCIES } from '../data/ministriesAndAgencies';
-import { cloudDatabaseService, RegisteredMember } from '../services/supabase';
-import { ShieldCheck, Mail, Building2, Award, User, ArrowRight, Sparkles, Zap, Users, Globe, ChevronRight, Upload, Camera, CheckCircle2, KeyRound, RefreshCw, Lock, LogIn, UserPlus, ExternalLink } from 'lucide-react';
+import { supabase, cloudDatabaseService } from '../services/supabase';
+import { ShieldCheck, Mail, Building2, User, Sparkles, Zap, Users, Globe, Camera, CheckCircle2, RefreshCw, Lock, LogIn, UserPlus, ExternalLink, AlertCircle } from 'lucide-react';
 
 export const CURATED_AVATARS = [
   { id: 'av-1', title: 'Executive Officer Female', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200' },
@@ -15,7 +15,7 @@ export const CURATED_AVATARS = [
 ];
 
 export const AuthPage: React.FC = () => {
-  const { loginWithDomain, setCompetitionMode, addRegisteredMember } = useStore();
+  const { loginWithDomain, setCompetitionMode } = useStore();
 
   // Auth Tab: 'signup' vs 'signin'
   const [authTab, setAuthTab] = useState<'signup' | 'signin'>('signup');
@@ -23,7 +23,7 @@ export const AuthPage: React.FC = () => {
   // Multi-step Registration State: 'form' | 'verification_pending' | 'verified_success'
   const [regStep, setRegStep] = useState<'form' | 'verification_pending' | 'verified_success'>('form');
 
-  // --- SIGN UP FORM STATE (Unfilled by default) ---
+  // --- SIGN UP FORM STATE ---
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,6 +31,7 @@ export const AuthPage: React.FC = () => {
   // Avatar / Custom Photo Upload State
   const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string>(CURATED_AVATARS[0].url);
   const [customPhotoPreview, setCustomPhotoPreview] = useState<string | null>(null);
+  const [customPhotoFile, setCustomPhotoFile] = useState<File | null>(null);
 
   // Dependent Dropdowns: Ministry -> Agency -> Department
   const [selectedMinistry, setSelectedMinistry] = useState<string>(
@@ -48,29 +49,18 @@ export const AuthPage: React.FC = () => {
   const [department, setDepartment] = useState('');
   const [selectedCadre, setSelectedCadre] = useState<CadreRank>('Assistant Director (GL 15)');
 
+  // Form Processing & Errors
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [signUpError, setSignUpError] = useState<string | null>(null);
+
   // --- SIGN IN FORM STATE ---
   const [signInEmail, setSignInEmail] = useState('');
   const [signInPassword, setSignInPassword] = useState('');
   const [signInError, setSignInError] = useState<string | null>(null);
 
   // --- EMAIL VERIFICATION STATE ---
-  const [verificationCode, setVerificationCode] = useState('482915');
   const [isResending, setIsResending] = useState(false);
   const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
-
-  const cadres: CadreRank[] = [
-    'Permanent Secretary',
-    'Director (GL 17)',
-    'Deputy Director (GL 16)',
-    'Assistant Director (GL 15)',
-    'Chief Administrative Officer (GL 14)',
-    'Principal Officer (GL 12)',
-    'Senior Executive Officer (GL 10)',
-    'Higher Executive Officer (GL 08)',
-    'Executive Officer (GL 07)'
-  ];
-
-  const isVerifiedDomain = email.endsWith('.gov.ng') || email.endsWith('.gov') || email.includes('@gov');
 
   const handleMinistryChange = (ministryName: string) => {
     setSelectedMinistry(ministryName);
@@ -86,6 +76,7 @@ export const AuthPage: React.FC = () => {
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setCustomPhotoFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         const result = reader.result as string;
@@ -96,58 +87,104 @@ export const AuthPage: React.FC = () => {
     }
   };
 
-  // Submit Sign Up -> Advance to Email Verification Confirmation Screen
-  const handleSignUpSubmit = (e: React.FormEvent) => {
+  // REAL SUPABASE SIGN UP SUBMIT
+  const handleSignUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !password) return;
-    setRegStep('verification_pending');
+    setSignUpError(null);
+    if (!name || !email || !password) {
+      setSignUpError('Please complete all required fields.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // 1. Supabase Auth Sign Up (Triggers real confirmation email dispatch)
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: window.location.origin,
+          data: {
+            full_name: name,
+            ministry: selectedMinistry,
+            agency: selectedAgency,
+            department: department || 'Administration',
+            cadre: selectedCadre
+          }
+        }
+      });
+
+      if (error) {
+        setSignUpError(error.message);
+        setIsSubmitting(false);
+        return;
+      }
+
+      const user = data.user;
+      if (!user) {
+        setSignUpError('Could not initialize user registration.');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // 2. Upload Custom Profile Photo to Supabase Storage if file selected
+      let finalAvatarUrl = selectedAvatarUrl;
+      if (customPhotoFile) {
+        const uploadedUrl = await cloudDatabaseService.uploadProfilePhoto(user.id, customPhotoFile);
+        if (uploadedUrl) {
+          finalAvatarUrl = uploadedUrl;
+        }
+      }
+
+      // 3. Save Profile record in public.profiles table
+      const fullOrgName = selectedAgency && selectedAgency !== `${selectedMinistry} Headquarters` 
+        ? selectedAgency 
+        : selectedMinistry;
+
+      await cloudDatabaseService.upsertProfile({
+        user_id: user.id,
+        full_name: name,
+        email,
+        ministry: selectedMinistry,
+        agency: fullOrgName,
+        department: department || 'Administration',
+        cadre: selectedCadre,
+        avatar_url: finalAvatarUrl
+      });
+
+      // Advance to Real Verification Pending Screen
+      setRegStep('verification_pending');
+    } catch (err: any) {
+      setSignUpError(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Complete Gmail-Style Email Verification Link/Code Activation
-  const handleConfirmEmailVerification = async () => {
-    setCompetitionMode('intra_dept');
-    const fullOrgName = selectedAgency && selectedAgency !== `${selectedMinistry} Headquarters` 
-      ? selectedAgency 
-      : selectedMinistry;
-      
-    const finalAvatar = customPhotoPreview || selectedAvatarUrl;
-
-    const newMember: RegisteredMember = {
-      id: `usr-${Date.now()}`,
-      name: name || 'Civil Servant Officer',
-      email,
-      isVerifiedGov: isVerifiedDomain,
-      mdaName: fullOrgName,
-      department: department || 'Administration',
-      cadre: selectedCadre,
-      avatar: finalAvatar,
-      careerXP: isVerifiedDomain ? 1200 : 500,
-      tier: isVerifiedDomain ? 'Bureau Specialist' : 'Civil Cadet',
-      isOnline: true,
-      registeredAt: new Date().toISOString().split('T')[0]
-    };
-
-    // Save permanently in Supabase Cloud DB
-    await cloudDatabaseService.registerMemberInCloud(newMember);
-    addRegisteredMember(newMember);
-
-    setRegStep('verified_success');
-
-    setTimeout(() => {
-      loginWithDomain(email, name, fullOrgName, selectedCadre, department || 'Administration', finalAvatar);
-    }, 1200);
-  };
-
-  const handleResendLink = () => {
+  // REAL SUPABASE RESEND VERIFICATION EMAIL
+  const handleResendLink = async () => {
     setIsResending(true);
-    setTimeout(() => {
+    setVerificationMessage(null);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email
+      });
+
+      if (error) {
+        setVerificationMessage(`Notice: ${error.message}`);
+      } else {
+        setVerificationMessage(`Verification link successfully dispatched to ${email}!`);
+      }
+    } catch (e) {
+      setVerificationMessage('Failed to resend email. Please try again.');
+    } finally {
       setIsResending(false);
-      setVerificationMessage(`Verification email link resent to ${email}!`);
-      setTimeout(() => setVerificationMessage(null), 4000);
-    }, 1000);
+    }
   };
 
-  // Submit Sign In Form -> Authenticate from Cloud DB
+  // REAL SUPABASE SIGN IN SUBMIT
   const handleSignInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSignInError(null);
@@ -157,17 +194,44 @@ export const AuthPage: React.FC = () => {
       return;
     }
 
-    const members = await cloudDatabaseService.fetchRegisteredMembers();
-    const existing = members.find(m => m.email.toLowerCase() === signInEmail.toLowerCase());
+    setIsSubmitting(true);
 
-    const finalName = existing?.name || signInEmail.split('@')[0] || 'Civil Servant';
-    const finalMda = existing?.mdaName || 'Federal Ministry of Finance';
-    const finalCadre = (existing?.cadre as CadreRank) || 'Senior Executive Officer (GL 10)';
-    const finalDept = existing?.department || 'Administration';
-    const finalAvatar = existing?.avatar || CURATED_AVATARS[0].url;
+    try {
+      // 1. Authenticate with Supabase Auth
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: signInEmail,
+        password: signInPassword
+      });
 
-    setCompetitionMode('intra_dept');
-    loginWithDomain(signInEmail, finalName, finalMda, finalCadre, finalDept, finalAvatar);
+      if (error) {
+        if (error.message.toLowerCase().includes('email not confirmed')) {
+          setSignInError('Your email address has not been verified yet. Please check your inbox and click the verification link.');
+        } else {
+          setSignInError(error.message);
+        }
+        setIsSubmitting(false);
+        return;
+      }
+
+      const user = data.user;
+      if (user) {
+        // 2. Fetch Profile from public.profiles database table
+        const profile = await cloudDatabaseService.fetchProfileByUserId(user.id);
+
+        const finalName = profile?.full_name || user.email?.split('@')[0] || 'Civil Servant';
+        const finalMda = profile?.agency || profile?.ministry || 'Federal Civil Service';
+        const finalCadre = (profile?.cadre as CadreRank) || 'Senior Executive Officer (GL 10)';
+        const finalDept = profile?.department || 'Administration';
+        const finalAvatar = profile?.avatar_url || CURATED_AVATARS[0].url;
+
+        setCompetitionMode('intra_dept');
+        loginWithDomain(user.email || signInEmail, finalName, finalMda, finalCadre, finalDept, finalAvatar);
+      }
+    } catch (err: any) {
+      setSignInError(err.message || 'Authentication error.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleDemoSignIn = () => {
@@ -195,26 +259,26 @@ export const AuthPage: React.FC = () => {
 
             <div>
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-400/30 text-emerald-300 text-xs font-bold mb-3">
-                <Sparkles className="w-3.5 h-3.5" /> 33 Federal Ministries Loaded
+                <Sparkles className="w-3.5 h-3.5" /> Supabase Production Auth Connected
               </div>
               <h1 className="text-3xl font-extrabold tracking-tight">NACETEM Gamification App</h1>
               <p className="text-sm text-emerald-100 mt-2 leading-relaxed">
-                Public Service Rules (PSR) Federal Ministries &amp; Agencies Championship Engine.
+                Public Service Rules (PSR) Federal Ministries &amp; Agencies Multi-Device Engine.
               </p>
             </div>
 
             <div className="space-y-3 pt-4 border-t border-emerald-600/40 text-xs text-emerald-100">
               <div className="flex items-center gap-2">
                 <Building2 className="w-4 h-4 text-emerald-300 shrink-0" />
-                <span>Inter-Departmental Challenge (Finance vs HR vs Procurement)</span>
+                <span>Realtime Cross-Device Matchmaking</span>
               </div>
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4 text-emerald-300 shrink-0" />
-                <span>Individual Officer League</span>
+                <span>Supabase PostgreSQL Database Storage</span>
               </div>
               <div className="flex items-center gap-2">
                 <Globe className="w-4 h-4 text-emerald-300 shrink-0" />
-                <span>Inter-Agency National League (NACETEM vs NAFDAC vs FMF)</span>
+                <span>Global Multi-Location Competition Engine</span>
               </div>
             </div>
           </div>
@@ -275,9 +339,16 @@ export const AuthPage: React.FC = () => {
               {regStep === 'form' && (
                 <form onSubmit={handleSignUpSubmit} className="space-y-4 animate-fadeIn">
                   <div>
-                    <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Officer Account Registration</h2>
-                    <p className="text-xs text-slate-500 mt-1">Fill in your details. Registration completes via email verification link.</p>
+                    <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Officer Registration (Supabase Auth)</h2>
+                    <p className="text-xs text-slate-500 mt-1">Fill in your profile details. Registration dispatches a real activation email link.</p>
                   </div>
+
+                  {signUpError && (
+                    <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold p-3 rounded-xl flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                      <span>{signUpError}</span>
+                    </div>
+                  )}
 
                   {/* FULL NAME */}
                   <div>
@@ -333,9 +404,8 @@ export const AuthPage: React.FC = () => {
                     <label className="block text-xs font-bold text-slate-800 flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
                         <Camera className="w-4 h-4 text-emerald-600" />
-                        <span>Profile Photo &amp; Official Avatar Selection</span>
+                        <span>Profile Photo &amp; Executive Avatars</span>
                       </span>
-                      <span className="text-[10px] text-emerald-700 font-semibold">No random pictures</span>
                     </label>
 
                     <div className="flex flex-col sm:flex-row items-center gap-4">
@@ -346,162 +416,141 @@ export const AuthPage: React.FC = () => {
                           alt="Selected Profile"
                           className="w-16 h-16 rounded-2xl object-cover border-2 border-emerald-500 shadow-md"
                         />
-                        <span className="absolute -bottom-1 -right-1 bg-emerald-600 text-white p-1 rounded-full text-[9px]">
-                          <CheckCircle2 className="w-3 h-3" />
-                        </span>
                       </div>
 
-                      <div className="flex-1 space-y-2 w-full">
-                        <div className="flex items-center gap-2">
-                          <label className="cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-3 py-1.5 rounded-xl text-xs transition-all shadow-sm flex items-center gap-1.5">
-                            <Upload className="w-3.5 h-3.5" />
-                            <span>Upload Official Photo</span>
-                            <input
-                              type="file"
-                              accept="image/*"
-                              onChange={handlePhotoUpload}
-                              className="hidden"
-                            />
-                          </label>
+                      <div className="flex-1 space-y-2 text-center sm:text-left w-full">
+                        <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold cursor-pointer transition-all">
+                          <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Upload Photo from Computer</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handlePhotoUpload}
+                            className="hidden"
+                          />
+                        </label>
+                        <p className="text-[10px] text-slate-400">Photos save to Supabase Storage bucket.</p>
+                      </div>
+                    </div>
 
-                          {customPhotoPreview && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCustomPhotoPreview(null);
-                                setSelectedAvatarUrl(CURATED_AVATARS[0].url);
-                              }}
-                              className="text-xs text-rose-600 font-bold hover:underline"
-                            >
-                              Reset Photo
-                            </button>
-                          )}
-                        </div>
-
-                        <p className="text-[10px] text-slate-500 font-medium">Or select a curated executive Civil Servant avatar:</p>
-
-                        <div className="grid grid-cols-6 gap-2">
-                          {CURATED_AVATARS.map((av) => (
-                            <button
-                              key={av.id}
-                              type="button"
-                              onClick={() => {
-                                setCustomPhotoPreview(null);
-                                setSelectedAvatarUrl(av.url);
-                              }}
-                              className={`rounded-xl overflow-hidden border-2 transition-all p-0.5 ${
-                                !customPhotoPreview && selectedAvatarUrl === av.url
-                                  ? 'border-emerald-600 ring-2 ring-emerald-400 scale-105'
-                                  : 'border-slate-200 hover:border-slate-300 opacity-80 hover:opacity-100'
-                              }`}
-                              title={av.title}
-                            >
-                              <img src={av.url} alt={av.title} className="w-9 h-9 object-cover rounded-lg" />
-                            </button>
-                          ))}
-                        </div>
+                    {/* Curated Avatars */}
+                    <div className="pt-2 border-t border-slate-200">
+                      <span className="block text-[11px] font-semibold text-slate-600 mb-2">Or Choose Curated Civil Servant Avatar:</span>
+                      <div className="grid grid-cols-6 gap-2">
+                        {CURATED_AVATARS.map((av) => (
+                          <button
+                            key={av.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedAvatarUrl(av.url);
+                              setCustomPhotoPreview(null);
+                              setCustomPhotoFile(null);
+                            }}
+                            className={`relative rounded-xl overflow-hidden border-2 transition-all p-0.5 ${
+                              selectedAvatarUrl === av.url && !customPhotoPreview
+                                ? 'border-emerald-600 ring-2 ring-emerald-500/30 scale-105'
+                                : 'border-slate-200 hover:border-slate-400'
+                            }`}
+                          >
+                            <img src={av.url} alt={av.title} className="w-full h-10 object-cover rounded-lg" />
+                          </button>
+                        ))}
                       </div>
                     </div>
                   </div>
 
-                  {/* DEPENDENT DROPDOWNS: Ministry -> Agency */}
-                  <div className="space-y-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200">
+                  {/* MINISTRY & AGENCY DROPDOWNS */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-bold text-slate-800 mb-1 flex items-center gap-1">
-                        <Building2 className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>1. Select Federal Ministry ({FEDERAL_MINISTRIES_AND_AGENCIES.length} Loaded)</span>
-                      </label>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Parent Federal Ministry</label>
                       <select
                         value={selectedMinistry}
                         onChange={(e) => handleMinistryChange(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 focus:outline-none focus:border-emerald-600 shadow-sm"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
                       >
-                        {FEDERAL_MINISTRIES_AND_AGENCIES.map((item) => (
-                          <option key={item.id} value={item.ministry}>
-                            {item.ministry} ({item.agencies.length} Agencies)
-                          </option>
+                        {FEDERAL_MINISTRIES_AND_AGENCIES.map(m => (
+                          <option key={m.ministry} value={m.ministry}>{m.ministry}</option>
                         ))}
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-emerald-800 mb-1 flex items-center gap-1">
-                        <ChevronRight className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>2. Select Agency / Institution Underneath ({availableAgencies.length} Available)</span>
-                      </label>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Assigned Agency / Bureau</label>
                       <select
                         value={selectedAgency}
                         onChange={(e) => setSelectedAgency(e.target.value)}
-                        className="w-full bg-white border border-emerald-300 rounded-xl px-3 py-2 text-xs font-bold text-slate-900 focus:outline-none focus:border-emerald-600 shadow-sm"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
                       >
-                        <option value={`${selectedMinistry} Headquarters`}>
-                          🏢 {selectedMinistry} Headquarters / Main Secretariat
-                        </option>
-                        {availableAgencies.map((agency, idx) => (
-                          <option key={idx} value={agency}>
-                            🏛️ {agency}
-                          </option>
+                        {availableAgencies.map(ag => (
+                          <option key={ag} value={ag}>{ag}</option>
                         ))}
                       </select>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  {/* DEPARTMENT & CADRE */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Internal Department</label>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Department / Division</label>
                       <input
                         type="text"
                         required
                         value={department}
                         onChange={(e) => setDepartment(e.target.value)}
-                        placeholder="e.g. Planning & Research"
+                        placeholder="e.g. Planning, Programming & Linkages"
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">Cadre Level</label>
-                      <div className="relative">
-                        <Award className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                        <select
-                          value={selectedCadre}
-                          onChange={(e) => setSelectedCadre(e.target.value as CadreRank)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
-                        >
-                          {cadres.map((cadre) => (
-                            <option key={cadre} value={cadre}>
-                              {cadre}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Official Cadre / Rank</label>
+                      <select
+                        value={selectedCadre}
+                        onChange={(e) => setSelectedCadre(e.target.value as CadreRank)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
+                      >
+                        <option value="Permanent Secretary">Permanent Secretary</option>
+                        <option value="Director (GL 17)">Director (GL 17)</option>
+                        <option value="Deputy Director (GL 16)">Deputy Director (GL 16)</option>
+                        <option value="Assistant Director (GL 15)">Assistant Director (GL 15)</option>
+                        <option value="Chief Administrative Officer (GL 14)">Chief Administrative Officer (GL 14)</option>
+                        <option value="Principal Officer (GL 12)">Principal Officer (GL 12)</option>
+                        <option value="Senior Executive Officer (GL 10)">Senior Executive Officer (GL 10)</option>
+                        <option value="Higher Executive Officer (GL 08)">Higher Executive Officer (GL 08)</option>
+                        <option value="Executive Officer (GL 07)">Executive Officer (GL 07)</option>
+                      </select>
                     </div>
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mt-2"
+                    disabled={isSubmitting}
+                    className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 border border-emerald-500 disabled:opacity-50"
                   >
-                    <span>Sign Up &amp; Send Confirmation Link</span>
-                    <ArrowRight className="w-4 h-4" />
+                    {isSubmitting ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <CheckCircle2 className="w-4 h-4" />
+                    )}
+                    <span>Register Account &amp; Send Confirmation Email</span>
                   </button>
                 </form>
               )}
 
-              {/* GMAIL-STYLE EMAIL CONFIRMATION LINK & CODE SCREEN */}
+              {/* VERIFICATION PENDING SCREEN (REAL SUPABASE AUTH EMAIL DISPATCH) */}
               {regStep === 'verification_pending' && (
                 <div className="space-y-6 animate-fadeIn text-center py-4">
-                  <div className="w-16 h-16 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-700 flex items-center justify-center mx-auto shadow-md">
+                  <div className="w-16 h-16 rounded-3xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto shadow-inner border border-emerald-200">
                     <Mail className="w-8 h-8" />
                   </div>
 
                   <div className="space-y-2">
-                    <span className="text-[10px] font-extrabold uppercase px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                      GMAIL / STANDARD EMAIL VERIFICATION
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-bold border border-emerald-200">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> SUPABASE AUTH EMAIL DISPATCHED
                     </span>
                     <h2 className="text-2xl font-black text-slate-900 mt-1">Verification Link Sent to Email</h2>
                     <p className="text-xs text-slate-600 max-w-sm mx-auto leading-relaxed">
-                      We sent an official confirmation activation link and 6-digit security code to your inbox:
+                      We have dispatched an official Supabase confirmation link to your email inbox:
                     </p>
                     <div className="bg-slate-100 text-emerald-800 font-mono font-bold text-xs px-4 py-2 rounded-xl border border-slate-200 inline-block shadow-sm">
                       {email}
@@ -516,41 +565,27 @@ export const AuthPage: React.FC = () => {
                   )}
 
                   <div className="bg-slate-50 border border-slate-200 p-6 rounded-3xl space-y-4 max-w-md mx-auto text-left shadow-sm">
-                    {/* DIRECT EMAIL VERIFICATION LINK BUTTON */}
                     <div className="space-y-2">
-                      <span className="block text-xs font-bold text-slate-700">Option 1: Direct Email Link Activation</span>
+                      <span className="block text-xs font-bold text-slate-700">Next Step: Email Confirmation</span>
+                      <p className="text-xs text-slate-500 leading-relaxed">
+                        Open your email provider (Gmail, Yahoo, etc.), find the email from Supabase Auth, and click the confirmation link to activate your account.
+                      </p>
                       <button
                         type="button"
-                        onClick={handleConfirmEmailVerification}
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 border border-emerald-500"
+                        onClick={() => {
+                          setAuthTab('signin');
+                          setRegStep('form');
+                          setSignInEmail(email);
+                        }}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl text-xs transition-all shadow-md flex items-center justify-center gap-2 border border-emerald-500 mt-2"
                       >
-                        <ExternalLink className="w-4 h-4 text-amber-300" />
-                        <span>👉 Click Email Verification Link (Complete Registration)</span>
+                        <LogIn className="w-4 h-4" />
+                        <span>After Confirming Email: Click Here to Sign In</span>
                       </button>
                     </div>
 
-                    <div className="relative flex py-1 items-center">
-                      <div className="flex-grow border-t border-slate-200"></div>
-                      <span className="flex-shrink mx-2 text-[10px] text-slate-400 font-bold uppercase">OR ENTER SECURITY CODE</span>
-                      <div className="flex-grow border-t border-slate-200"></div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="block text-xs font-bold text-slate-700">Option 2: 6-Digit Security Code</label>
-                      <div className="relative">
-                        <KeyRound className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
-                        <input
-                          type="text"
-                          maxLength={6}
-                          value={verificationCode}
-                          onChange={(e) => setVerificationCode(e.target.value)}
-                          className="w-full bg-white border-2 border-emerald-500 rounded-xl pl-10 pr-4 py-2 font-mono text-center text-lg font-bold tracking-widest text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 shadow-inner"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
-                      <span className="text-slate-500">Didn't receive email link?</span>
+                    <div className="flex items-center justify-between text-xs pt-3 border-t border-slate-200">
+                      <span className="text-slate-500">Didn't receive verification email?</span>
                       <button
                         type="button"
                         onClick={handleResendLink}
@@ -564,19 +599,6 @@ export const AuthPage: React.FC = () => {
                   </div>
                 </div>
               )}
-
-              {/* VERIFIED SUCCESS SCREEN */}
-              {regStep === 'verified_success' && (
-                <div className="space-y-4 animate-fadeIn text-center py-8">
-                  <div className="w-16 h-16 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-lg animate-bounce">
-                    <CheckCircle2 className="w-9 h-9" />
-                  </div>
-                  <h2 className="text-2xl font-black text-slate-900">Email Verified &amp; Registration Complete!</h2>
-                  <p className="text-xs text-slate-600 max-w-sm mx-auto">
-                    Your officer profile has been saved to the Cloud Database. Entering the platform...
-                  </p>
-                </div>
-              )}
             </>
           )}
 
@@ -587,12 +609,13 @@ export const AuthPage: React.FC = () => {
             <form onSubmit={handleSignInSubmit} className="space-y-4 animate-fadeIn">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Registered Officer Sign In</h2>
-                <p className="text-xs text-slate-500 mt-1">Enter your registered official email and password to access the platform.</p>
+                <p className="text-xs text-slate-500 mt-1">Enter your registered email address and password to authenticate via Supabase Auth.</p>
               </div>
 
               {signInError && (
-                <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold p-3 rounded-xl">
-                  {signInError}
+                <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold p-3 rounded-xl flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{signInError}</span>
                 </div>
               )}
 
@@ -628,9 +651,14 @@ export const AuthPage: React.FC = () => {
 
               <button
                 type="submit"
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mt-2"
+                disabled={isSubmitting}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
               >
-                <LogIn className="w-4 h-4" />
+                {isSubmitting ? (
+                  <RefreshCw className="w-4 h-4 animate-spin" />
+                ) : (
+                  <LogIn className="w-4 h-4" />
+                )}
                 <span>Sign In to Platform</span>
               </button>
             </form>
