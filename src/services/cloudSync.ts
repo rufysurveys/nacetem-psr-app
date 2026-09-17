@@ -47,9 +47,20 @@ export const cloudSyncService = {
     };
   },
 
-  // Fetch all tournaments globally across devices (Abuja, Lagos, etc.)
+  // Fetch all tournaments globally across devices (Abuja, Lagos, etc.) with rate-limit-free CDN
   async fetchCloudTournaments(): Promise<ScheduledTournamentItem[] | null> {
     try {
+      // 1. Primary: Raw GitHub CDN (Zero rate limits, instant global response)
+      const rawCdnUrl = `https://gist.githubusercontent.com/rufysurveys/${GIST_ID}/raw/gist_db.json?t=${Date.now()}`;
+      const cdnRes = await fetch(rawCdnUrl, { cache: 'no-store' });
+      if (cdnRes.ok) {
+        const items = await cdnRes.json();
+        if (Array.isArray(items)) {
+          return items;
+        }
+      }
+
+      // 2. Fallback: GitHub Gist REST API
       const res = await fetch(`${GIST_API_URL}?t=${Date.now()}`, {
         cache: 'no-store',
         headers: {
