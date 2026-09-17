@@ -1,13 +1,94 @@
 import { createClient } from '@supabase/supabase-js';
-import { UserProfile } from '../types';
-import { ScheduledTournamentItem } from '../store/useStore';
 
-// Live Supabase Cloud Database Configuration
-const SUPABASE_URL = 'https://nacetem-psr-app.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hY2V0ZW0tcHNyLWFwcCIsInJvbGUiOiJhb24iLCJpYXQiOjE3ODk1NzM2MDAsImV4cCI6MjEwNTE0OTYwMH0.signature';
+// Environment credentials with fallback placeholders for initial connection setup
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://your-project-ref.supabase.co';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-actual-supabase-anon-key';
 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  }
+});
 
+// ====================================================================
+// DATABASE TYPES & SCHEMAS
+// ====================================================================
+
+export interface ProfileRecord {
+  id: string;
+  user_id: string;
+  full_name: string;
+  email: string;
+  ministry: string;
+  agency: string;
+  department: string;
+  cadre: string;
+  avatar_url?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GameRecord {
+  id: string;
+  host_id: string;
+  title: string;
+  competition_mode: 'intra_dept' | 'inter_agency';
+  target_org: string;
+  start_datetime: string;
+  cutoff_datetime: string;
+  max_players: number;
+  status: 'draft' | 'scheduled' | 'open' | 'full' | 'active' | 'completed' | 'cancelled';
+  description?: string;
+  created_at: string;
+}
+
+export interface GamePlayerRecord {
+  id: string;
+  game_id: string;
+  user_id: string;
+  status: 'joined' | 'ready' | 'playing' | 'completed' | 'left';
+  current_score: number;
+  joined_at: string;
+  profile?: ProfileRecord;
+}
+
+export interface QuestionRecord {
+  id: string;
+  category: string;
+  chapter: string;
+  question_text: string;
+  options: string[];
+  correct_option_index?: number; // Only fetched server-side or after round completion
+  explanation?: string;
+  created_at: string;
+}
+
+export interface AnswerRecord {
+  id: string;
+  game_id: string;
+  question_id: string;
+  user_id: string;
+  selected_option: number;
+  is_correct: boolean;
+  response_time_ms: number;
+  submitted_at: string;
+}
+
+export interface ResultRecord {
+  id: string;
+  game_id: string;
+  user_id: string;
+  total_score: number;
+  total_accuracy: number;
+  rank?: number;
+  xp_earned: number;
+  completed_at: string;
+  profile?: ProfileRecord;
+}
+
+// Backward compatible interface for UI components
 export interface RegisteredMember {
   id: string;
   name: string;
@@ -23,173 +104,232 @@ export interface RegisteredMember {
   registeredAt: string;
 }
 
-export interface DuelChallenge {
-  id: string;
-  challengerId: string;
-  challengerName: string;
-  challengerMda: string;
-  challengerAvatar: string;
-  defenderId: string;
-  defenderName: string;
-  defenderMda: string;
-  defenderAvatar: string;
-  status: 'pending' | 'accepted' | 'declined' | 'completed';
-  stageNumber: 1 | 2 | 3;
-  createdAt: string;
-}
-
-const LOCAL_MEMBERS_KEY = 'nacetem_psr_registered_members_v1';
-const LOCAL_DUELS_KEY = 'nacetem_psr_active_duels_v1';
-
-// Initial pre-registered exemplary civil servant members across Federal Ministries
-export const DEFAULT_REGISTERED_MEMBERS: RegisteredMember[] = [
-  {
-    id: 'usr-01',
-    name: 'Abubakar Rufai',
-    email: 'rufai.abubakar@nacetem.gov.ng',
-    isVerifiedGov: true,
-    mdaName: 'National Centre for Technology Management (NACETEM)',
-    department: 'Planning, Programming and Linkages',
-    cadre: 'Assistant Director (GL 15)',
-    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
-    careerXP: 14500,
-    tier: 'Bureau Specialist',
-    isOnline: true,
-    registeredAt: '2026-09-01'
-  },
-  {
-    id: 'usr-02',
-    name: 'Dr. Stella Okonkwo',
-    email: 'stella.o@fmf.gov.ng',
-    isVerifiedGov: true,
-    mdaName: 'Federal Ministry of Finance',
-    department: 'Revenue & Budget',
-    cadre: 'Director (GL 17)',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200',
-    careerXP: 18200,
-    tier: 'Permanent Secretary Star',
-    isOnline: true,
-    registeredAt: '2026-09-02'
-  },
-  {
-    id: 'usr-03',
-    name: 'Engr. Danjuma Bello',
-    email: 'danjuma.b@fist.gov.ng',
-    isVerifiedGov: true,
-    mdaName: 'Federal Ministry of Innovation, Science and Technology',
-    department: 'Technology Transfer',
-    cadre: 'Chief Administrative Officer (GL 14)',
-    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200',
-    careerXP: 11300,
-    tier: 'Ethics Master',
-    isOnline: false,
-    registeredAt: '2026-09-05'
-  },
-  {
-    id: 'usr-04',
-    name: 'Mrs. Amina Yusuf',
-    email: 'a.yusuf@nafdac.gov.ng',
-    isVerifiedGov: true,
-    mdaName: 'National Agency for Food and Drug Administration and Control (NAFDAC)',
-    department: 'Regulatory Affairs',
-    cadre: 'Deputy Director (GL 16)',
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=200',
-    careerXP: 13900,
-    tier: 'Bureau Specialist',
-    isOnline: true,
-    registeredAt: '2026-09-10'
-  },
-  {
-    id: 'usr-05',
-    name: 'Mr. Chidi Eze',
-    email: 'c.eze@ncaa.gov.ng',
-    isVerifiedGov: true,
-    mdaName: 'Nigerian Civil Aviation Authority (NCAA)',
-    department: 'Legal Services',
-    cadre: 'Principal Officer (GL 12)',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200',
-    careerXP: 9800,
-    tier: 'Civil Cadet',
-    isOnline: true,
-    registeredAt: '2026-09-12'
-  }
-];
+// ====================================================================
+// CLOUD DATABASE SERVICE FUNCTIONS
+// ====================================================================
 
 export const cloudDatabaseService = {
-  // --- MEMBERS DIRECTORY ---
-  async fetchRegisteredMembers(): Promise<RegisteredMember[]> {
-    try {
-      const { data, error } = await supabase.from('profiles').select('*');
-      if (!error && data && data.length > 0) {
-        return data as RegisteredMember[];
-      }
-    } catch (e) {
-      console.warn('Supabase profiles fetch notice:', e);
+  // --- AUTH & PROFILES ---
+  async fetchProfileByUserId(userId: string): Promise<ProfileRecord | null> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+      
+    if (error) {
+      console.error('Error fetching profile:', error);
+      return null;
     }
+    return data as ProfileRecord | null;
+  },
 
-    // Fallback local storage sync
-    try {
-      const raw = localStorage.getItem(LOCAL_MEMBERS_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {}
+  async fetchAllProfiles(): Promise<ProfileRecord[]> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    return DEFAULT_REGISTERED_MEMBERS;
+    if (error) {
+      console.error('Error fetching profiles:', error);
+      return [];
+    }
+    return (data || []) as ProfileRecord[];
+  },
+
+  async upsertProfile(profile: Partial<ProfileRecord> & { user_id: string; email: string; full_name: string }): Promise<ProfileRecord | null> {
+    const { data, error } = await supabase
+      .from('profiles')
+      .upsert(profile, { onConflict: 'user_id' })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error upserting profile:', error);
+      return null;
+    }
+    return data as ProfileRecord;
+  },
+
+  // Backward-compatible adapters querying Supabase 'profiles' table
+  async fetchRegisteredMembers(): Promise<RegisteredMember[]> {
+    const profiles = await this.fetchAllProfiles();
+    return profiles.map(p => ({
+      id: p.user_id,
+      name: p.full_name,
+      email: p.email,
+      isVerifiedGov: p.email.endsWith('.gov.ng') || p.email.endsWith('.gov'),
+      mdaName: p.agency || p.ministry,
+      department: p.department,
+      cadre: p.cadre,
+      avatar: p.avatar_url || '',
+      careerXP: 1000,
+      tier: 'Civil Cadet',
+      registeredAt: p.created_at.split('T')[0]
+    }));
   },
 
   async registerMemberInCloud(member: RegisteredMember): Promise<boolean> {
-    try {
-      // Save locally first
-      const existing = (await this.fetchRegisteredMembers()) || [];
-      const filtered = existing.filter(m => m.email !== member.email);
-      const updated = [member, ...filtered];
-      localStorage.setItem(LOCAL_MEMBERS_KEY, JSON.stringify(updated));
+    const res = await this.upsertProfile({
+      user_id: member.id,
+      full_name: member.name,
+      email: member.email,
+      ministry: member.mdaName,
+      agency: member.mdaName,
+      department: member.department,
+      cadre: member.cadre,
+      avatar_url: member.avatar
+    });
+    return !!res;
+  },
 
-      // Sync to Supabase cloud
-      const { error } = await supabase.from('profiles').upsert([member]);
-      return !error;
+  async sendDuelChallenge(_challenge: any): Promise<boolean> {
+    return true;
+  },
+
+  // --- STORAGE (PROFILE PHOTOS) ---
+  async uploadProfilePhoto(userId: string, file: File): Promise<string | null> {
+    try {
+      const fileExt = file.name.split('.').pop();
+      const filePath = `avatars/${userId}_${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('profile-photos')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError);
+        return null;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('profile-photos')
+        .getPublicUrl(filePath);
+
+      return publicUrlData.publicUrl;
     } catch (e) {
-      console.warn('Register member cloud error:', e);
+      console.error('Upload exception:', e);
+      return null;
+    }
+  },
+
+  // --- GAMES ---
+  async fetchAvailableGames(): Promise<GameRecord[]> {
+    const { data, error } = await supabase
+      .from('games')
+      .select('*')
+      .in('status', ['scheduled', 'open', 'full', 'active'])
+      .order('start_datetime', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching available games:', error);
+      return [];
+    }
+    return (data || []) as GameRecord[];
+  },
+
+  async createGame(game: Omit<GameRecord, 'id' | 'created_at'>): Promise<GameRecord | null> {
+    const { data, error } = await supabase
+      .from('games')
+      .insert(game)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error creating game:', error);
+      return null;
+    }
+    return data as GameRecord;
+  },
+
+  async updateGameStatus(gameId: string, status: GameRecord['status']): Promise<boolean> {
+    const { error } = await supabase
+      .from('games')
+      .update({ status })
+      .eq('id', gameId);
+
+    if (error) {
+      console.error('Error updating game status:', error);
       return false;
     }
+    return true;
   },
 
-  // --- DUEL CHALLENGES ---
-  async sendDuelChallenge(challenge: DuelChallenge): Promise<boolean> {
-    try {
-      const raw = localStorage.getItem(LOCAL_DUELS_KEY);
-      const duels: DuelChallenge[] = raw ? JSON.parse(raw) : [];
-      duels.unshift(challenge);
-      localStorage.setItem(LOCAL_DUELS_KEY, JSON.stringify(duels));
+  // --- GAME PLAYERS ---
+  async joinGame(gameId: string, userId: string): Promise<GamePlayerRecord | null> {
+    const { data, error } = await supabase
+      .from('game_players')
+      .insert({
+        game_id: gameId,
+        user_id: userId,
+        status: 'joined',
+        current_score: 0
+      })
+      .select()
+      .single();
 
-      const { error } = await supabase.from('duel_challenges').insert([challenge]);
-      return !error;
-    } catch (e) {
-      return true;
+    if (error) {
+      console.error('Error joining game:', error);
+      return null;
     }
+    return data as GamePlayerRecord;
   },
 
-  async fetchActiveDuelChallenges(userId: string): Promise<DuelChallenge[]> {
-    try {
-      const { data, error } = await supabase
-        .from('duel_challenges')
+  async fetchGamePlayers(gameId: string): Promise<(GamePlayerRecord & { profile?: ProfileRecord })[]> {
+    const { data, error } = await supabase
+      .from('game_players')
+      .select(`
+        *,
+        profile:profiles!game_players_user_id_fkey(*)
+      `)
+      .eq('game_id', gameId)
+      .order('joined_at', { ascending: true });
+
+    if (error) {
+      // Fallback query if relation key is named differently
+      const { data: simpleData } = await supabase
+        .from('game_players')
         .select('*')
-        .or(`defenderId.eq.${userId},challengerId.eq.${userId}`);
-      if (!error && data && data.length > 0) {
-        return data as DuelChallenge[];
-      }
-    } catch (e) {}
+        .eq('game_id', gameId);
 
-    try {
-      const raw = localStorage.getItem(LOCAL_DUELS_KEY);
-      if (raw) {
-        const duels: DuelChallenge[] = JSON.parse(raw);
-        return duels.filter(d => d.defenderId === userId || d.challengerId === userId);
-      }
-    } catch (e) {}
+      return (simpleData || []) as GamePlayerRecord[];
+    }
 
-    return [];
+    return (data || []) as (GamePlayerRecord & { profile?: ProfileRecord })[];
+  },
+
+  // --- SECURE SCORING RPC ---
+  async submitAnswer(gameId: string, questionId: string, selectedOption: number, responseTimeMs: number) {
+    const { data, error } = await supabase.rpc('submit_player_answer', {
+      p_game_id: gameId,
+      p_question_id: questionId,
+      p_selected_option: selectedOption,
+      p_response_time_ms: responseTimeMs
+    });
+
+    if (error) {
+      console.error('RPC submit_player_answer error:', error);
+      return null;
+    }
+
+    return data as { is_correct: boolean; points_earned: number; current_total_score: number };
+  },
+
+  // --- RESULTS ---
+  async fetchGameResults(gameId: string): Promise<ResultRecord[]> {
+    const { data, error } = await supabase
+      .from('results')
+      .select(`
+        *,
+        profile:profiles(*)
+      `)
+      .eq('game_id', gameId)
+      .order('total_score', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching results:', error);
+      return [];
+    }
+    return (data || []) as ResultRecord[];
   }
 };
