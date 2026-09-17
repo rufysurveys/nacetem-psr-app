@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useStore, ExtendedCompMode } from '../store/useStore';
+import { useStore } from '../store/useStore';
 import { CadreRank } from '../types';
 import { FEDERAL_MINISTRIES_AND_AGENCIES } from '../data/ministriesAndAgencies';
 import { cloudDatabaseService, RegisteredMember } from '../services/supabase';
@@ -17,7 +17,6 @@ export const CURATED_AVATARS = [
 export const AuthPage: React.FC = () => {
   const { loginWithDomain, setCompetitionMode, addRegisteredMember } = useStore();
 
-  const [authMode, setAuthMode] = useState<'sso' | 'email'>('sso');
   const [email, setEmail] = useState('rufai.abubakar@nacetem.gov.ng');
   const [name, setName] = useState('Abubakar Rufai');
 
@@ -46,7 +45,6 @@ export const AuthPage: React.FC = () => {
   );
   const [department, setDepartment] = useState('Planning, Programming and Linkages');
   const [selectedCadre, setSelectedCadre] = useState<CadreRank>('Assistant Director (GL 15)');
-  const [compMode, setCompMode] = useState<ExtendedCompMode>('intra_dept');
 
   const cadres: CadreRank[] = [
     'Permanent Secretary',
@@ -88,12 +86,12 @@ export const AuthPage: React.FC = () => {
 
   const handleStartRegistration = (e: React.FormEvent) => {
     e.preventDefault();
-    // Open Global Standard Email Verification Modal
+    // Always trigger 2-Step Email Verification Link/Code Modal
     setIsVerificationModalOpen(true);
   };
 
   const handleConfirmEmailVerification = async () => {
-    setCompetitionMode(compMode);
+    setCompetitionMode('intra_dept');
     const fullOrgName = selectedAgency && selectedAgency !== `${selectedMinistry} Headquarters` 
       ? selectedAgency 
       : selectedMinistry;
@@ -115,11 +113,11 @@ export const AuthPage: React.FC = () => {
       registeredAt: new Date().toISOString().split('T')[0]
     };
 
-    // Save in Supabase Cloud DB
+    // Save permanently in Supabase Cloud DB
     await cloudDatabaseService.registerMemberInCloud(newMember);
     addRegisteredMember(newMember);
 
-    // Complete login
+    // Complete login and enter app
     loginWithDomain(email, name, fullOrgName, selectedCadre, department, finalAvatar);
   };
 
@@ -127,7 +125,7 @@ export const AuthPage: React.FC = () => {
     setIsResending(true);
     setTimeout(() => {
       setIsResending(false);
-      setVerificationSuccessMessage(`Verification link resent to ${email}!`);
+      setVerificationSuccessMessage(`Verification activation link resent to ${email}!`);
       setTimeout(() => setVerificationSuccessMessage(null), 4000);
     }, 1200);
   };
@@ -148,7 +146,7 @@ export const AuthPage: React.FC = () => {
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-12 bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden">
         
-        {/* Left Branding */}
+        {/* Left Branding Banner */}
         <div className="md:col-span-5 bg-gradient-to-br from-emerald-700 via-emerald-800 to-teal-900 p-8 text-white flex flex-col justify-between relative overflow-hidden">
           <div className="space-y-6 relative z-10">
             <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-emerald-300 shadow-inner">
@@ -161,7 +159,7 @@ export const AuthPage: React.FC = () => {
               </div>
               <h1 className="text-3xl font-extrabold tracking-tight">NACETEM Gamification App</h1>
               <p className="text-sm text-emerald-100 mt-2 leading-relaxed">
-                Exhaustive Federal Ministries & Agencies Championship Engine.
+                Public Service Rules (PSR) Federal Ministries &amp; Agencies Championship Engine.
               </p>
             </div>
 
@@ -192,44 +190,61 @@ export const AuthPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Form */}
+        {/* Right Form - Clean Standalone Officer Registration */}
         <div className="md:col-span-7 p-6 sm:p-8 space-y-5">
           <div>
-            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Federal Ministry & Agency Registration</h2>
-            <p className="text-xs text-slate-500 mt-1">Global standard registration with instant email verification.</p>
-          </div>
-
-          <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold text-slate-600">
-            <button
-              type="button"
-              onClick={() => setAuthMode('sso')}
-              className={`flex-1 py-2 rounded-lg transition-all ${
-                authMode === 'sso' ? 'bg-white text-emerald-700 font-extrabold shadow-sm' : 'hover:text-slate-900'
-              }`}
-            >
-              Gov Domain SSO (@gov.ng)
-            </button>
-            <button
-              type="button"
-              onClick={() => setAuthMode('email')}
-              className={`flex-1 py-2 rounded-lg transition-all ${
-                authMode === 'email' ? 'bg-white text-emerald-700 font-extrabold shadow-sm' : 'hover:text-slate-900'
-              }`}
-            >
-              Email & Verification Code
-            </button>
+            <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Civil Servant Registration</h2>
+            <p className="text-xs text-slate-500 mt-1">Global standard registration with email confirmation link &amp; custom photo upload.</p>
           </div>
 
           <form onSubmit={handleStartRegistration} className="space-y-4">
             
-            {/* PROFILE PHOTO & AVATAR SELECTION SYSTEM */}
+            {/* FULL NAME & EMAIL */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name & Rank</label>
+              <div className="relative">
+                <User className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Abubakar Rufai"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                <span>Official Email Address</span>
+                {isVerifiedDomain && (
+                  <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" /> Verified Domain
+                  </span>
+                )}
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="officer@agency.gov.ng"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
+                />
+              </div>
+            </div>
+
+            {/* PROFILE PHOTO & CURATED EXECUTIVE AVATAR SELECTION */}
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
               <label className="block text-xs font-bold text-slate-800 flex items-center justify-between">
                 <span className="flex items-center gap-1.5">
                   <Camera className="w-4 h-4 text-emerald-600" />
-                  <span>Profile Photo & Official Avatar Selection</span>
+                  <span>Profile Photo &amp; Official Avatar Selection</span>
                 </span>
-                <span className="text-[10px] text-slate-500 font-normal">No random pictures</span>
+                <span className="text-[10px] text-emerald-700 font-semibold">No random pictures</span>
               </label>
 
               <div className="flex flex-col sm:flex-row items-center gap-4">
@@ -249,7 +264,7 @@ export const AuthPage: React.FC = () => {
                   <div className="flex items-center gap-2">
                     <label className="cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-3 py-1.5 rounded-xl text-xs transition-all shadow-sm flex items-center gap-1.5">
                       <Upload className="w-3.5 h-3.5" />
-                      <span>Upload Your Photo</span>
+                      <span>Upload Official Photo</span>
                       <input
                         type="file"
                         accept="image/*"
@@ -272,7 +287,7 @@ export const AuthPage: React.FC = () => {
                     )}
                   </div>
 
-                  <p className="text-[10px] text-slate-500">Or select from curated executive Civil Servant avatars:</p>
+                  <p className="text-[10px] text-slate-500 font-medium">Or select a curated executive Civil Servant avatar:</p>
 
                   <div className="grid grid-cols-6 gap-2">
                     {CURATED_AVATARS.map((av) => (
@@ -295,75 +310,6 @@ export const AuthPage: React.FC = () => {
                     ))}
                   </div>
                 </div>
-              </div>
-            </div>
-
-            {/* Competition Mode Select */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Select Preferred League Mode</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCompMode('intra_dept')}
-                  className={`p-2.5 rounded-2xl border text-left transition-all ${
-                    compMode === 'intra_dept'
-                      ? 'bg-emerald-50 border-emerald-500 text-emerald-900 font-bold shadow-sm'
-                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
-                  }`}
-                >
-                  <span className="block text-[11px] font-bold">🏢 Intra-Agency Challenge</span>
-                  <span className="text-[9px] text-slate-500 font-normal">Inter-Dept & Peer Matchups</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setCompMode('inter_agency')}
-                  className={`p-2.5 rounded-2xl border text-left transition-all ${
-                    compMode === 'inter_agency'
-                      ? 'bg-emerald-50 border-emerald-500 text-emerald-900 font-bold shadow-sm'
-                      : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
-                  }`}
-                >
-                  <span className="block text-[11px] font-bold">🌐 Inter-Agency Championship</span>
-                  <span className="text-[9px] text-slate-500 font-normal">National All-Agencies</span>
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Full Name & Rank</label>
-              <div className="relative">
-                <User className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Abubakar Rufai"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
-                <span>Official Email (Verification link will be sent)</span>
-                {isVerifiedDomain && (
-                  <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Verified Domain
-                  </span>
-                )}
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="officer@agency.gov.ng"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600"
-                />
               </div>
             </div>
 
@@ -418,7 +364,7 @@ export const AuthPage: React.FC = () => {
                   value={department}
                   onChange={(e) => setDepartment(e.target.value)}
                   placeholder="e.g. Research & Innovation"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
                 />
               </div>
 
@@ -429,7 +375,7 @@ export const AuthPage: React.FC = () => {
                   <select
                     value={selectedCadre}
                     onChange={(e) => setSelectedCadre(e.target.value as CadreRank)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
                   >
                     {cadres.map((cadre) => (
                       <option key={cadre} value={cadre}>
@@ -445,7 +391,7 @@ export const AuthPage: React.FC = () => {
               type="submit"
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mt-2"
             >
-              <span>Register & Send Verification Link</span>
+              <span>Complete Registration &amp; Send Verification Code</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
@@ -468,9 +414,9 @@ export const AuthPage: React.FC = () => {
               <div className="w-14 h-14 rounded-2xl bg-emerald-100 border border-emerald-300 text-emerald-700 flex items-center justify-center mx-auto shadow-sm">
                 <Mail className="w-7 h-7" />
               </div>
-              <h3 className="text-xl font-extrabold text-slate-900">Email Verification Sent</h3>
+              <h3 className="text-xl font-extrabold text-slate-900">Email Verification Link Sent</h3>
               <p className="text-xs text-slate-600">
-                We sent an official confirmation link and 6-digit security code to:
+                We sent an official confirmation activation link and 6-digit security code to:
               </p>
               <div className="bg-slate-100 text-emerald-800 font-mono font-bold text-xs px-3 py-1.5 rounded-lg border border-slate-200 inline-block">
                 {email}
@@ -488,7 +434,7 @@ export const AuthPage: React.FC = () => {
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
                   <span>Enter 6-Digit Security Code</span>
-                  <span className="text-[10px] text-slate-500 font-normal">Check your inbox or spam</span>
+                  <span className="text-[10px] text-slate-500 font-normal">Check your inbox or activation link</span>
                 </label>
                 <div className="relative">
                   <KeyRound className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
@@ -508,7 +454,7 @@ export const AuthPage: React.FC = () => {
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2"
               >
                 <CheckCircle2 className="w-4 h-4 text-amber-300" />
-                <span>Verify Email & Complete Registration</span>
+                <span>Verify Email &amp; Complete Registration</span>
               </button>
 
               <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
@@ -520,7 +466,7 @@ export const AuthPage: React.FC = () => {
                   className="text-emerald-700 hover:text-emerald-800 font-bold flex items-center gap-1 transition-all disabled:opacity-50"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isResending ? 'animate-spin' : ''}`} />
-                  <span>Resend Link</span>
+                  <span>Resend Activation Link</span>
                 </button>
               </div>
             </div>
