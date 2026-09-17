@@ -134,50 +134,87 @@ ALTER TABLE public.results ENABLE ROW LEVEL SECURITY;
 -- PROFILES POLICIES
 CREATE POLICY "Public authenticated read profiles"
   ON public.profiles FOR SELECT
-  TO authenticated
   USING (true);
 
-CREATE POLICY "Users insert own profile"
+CREATE POLICY "Users insert profile"
   ON public.profiles FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK (true);
 
 CREATE POLICY "Users update own profile"
   ON public.profiles FOR UPDATE
-  TO authenticated
-  USING (auth.uid() = user_id);
+  USING (true);
+
+-- AUTOMATIC PROFILE TRIGGER ON AUTH USER CREATION
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.profiles (
+    user_id,
+    full_name,
+    email,
+    ministry,
+    agency,
+    department,
+    cadre,
+    avatar_url
+  )
+  VALUES (
+    new.id,
+    COALESCE(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)),
+    new.email,
+    COALESCE(new.raw_user_meta_data->>'ministry', 'Federal Ministry of Innovation, Science and Technology'),
+    COALESCE(new.raw_user_meta_data->>'agency', 'National Centre for Technology Management (NACETEM)'),
+    COALESCE(new.raw_user_meta_data->>'department', 'Administration'),
+    COALESCE(new.raw_user_meta_data->>'cadre', 'Senior Executive Officer (GL 10)'),
+    COALESCE(new.raw_user_meta_data->>'avatar_url', '')
+  )
+  ON CONFLICT (user_id) DO UPDATE
+  SET
+    full_name = EXCLUDED.full_name,
+    email = EXCLUDED.email,
+    ministry = EXCLUDED.ministry,
+    agency = EXCLUDED.agency,
+    department = EXCLUDED.department,
+    cadre = EXCLUDED.cadre,
+    avatar_url = EXCLUDED.avatar_url;
+
+  RETURN new;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- GAMES POLICIES
-CREATE POLICY "Public authenticated read games"
+CREATE POLICY "Public read games"
   ON public.games FOR SELECT
-  TO authenticated
   USING (true);
 
-CREATE POLICY "Host insert game"
+CREATE POLICY "Public insert game"
   ON public.games FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = host_id);
+  WITH CHECK (true);
 
-CREATE POLICY "Host update game"
+CREATE POLICY "Public update game"
   ON public.games FOR UPDATE
-  TO authenticated
-  USING (auth.uid() = host_id);
+  USING (true);
 
 -- GAME PLAYERS POLICIES
-CREATE POLICY "Public authenticated read game_players"
+CREATE POLICY "Public read game_players"
   ON public.game_players FOR SELECT
-  TO authenticated
   USING (true);
 
-CREATE POLICY "Player join self"
+CREATE POLICY "Public join game_players"
   ON public.game_players FOR INSERT
-  TO authenticated
-  WITH CHECK (auth.uid() = user_id);
+  WITH CHECK (true);
 
-CREATE POLICY "Player update self status"
+CREATE POLICY "Public update game_players"
   ON public.game_players FOR UPDATE
-  TO authenticated
-  USING (auth.uid() = user_id);
+  USING (true);
 
 -- QUESTIONS POLICIES
 CREATE POLICY "Authenticated read questions"

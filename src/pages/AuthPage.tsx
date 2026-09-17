@@ -153,6 +153,13 @@ export const AuthPage: React.FC = () => {
         avatar_url: finalAvatarUrl
       });
 
+      // If Supabase auto-confirmed or session is present, log in immediately
+      if (data.session) {
+        setCompetitionMode('intra_dept');
+        loginWithDomain(email, name, fullOrgName, selectedCadre, department || 'Administration', finalAvatarUrl);
+        return;
+      }
+
       // Advance to Real Verification Pending Screen
       setRegStep('verification_pending');
     } catch (err: any) {
@@ -215,14 +222,29 @@ export const AuthPage: React.FC = () => {
 
       const user = data.user;
       if (user) {
-        // 2. Fetch Profile from public.profiles database table
-        const profile = await cloudDatabaseService.fetchProfileByUserId(user.id);
+        // 2. Fetch or create Profile in public.profiles database table
+        let profile = await cloudDatabaseService.fetchProfileByUserId(user.id);
 
-        const finalName = profile?.full_name || user.email?.split('@')[0] || 'Civil Servant';
-        const finalMda = profile?.agency || profile?.ministry || 'Federal Civil Service';
-        const finalCadre = (profile?.cadre as CadreRank) || 'Senior Executive Officer (GL 10)';
-        const finalDept = profile?.department || 'Administration';
-        const finalAvatar = profile?.avatar_url || CURATED_AVATARS[0].url;
+        const meta = user.user_metadata || {};
+        const finalName = profile?.full_name || meta.full_name || user.email?.split('@')[0] || 'Civil Servant';
+        const finalMda = profile?.agency || profile?.ministry || meta.agency || meta.ministry || 'Federal Civil Service';
+        const finalCadre = (profile?.cadre || meta.cadre as CadreRank) || 'Senior Executive Officer (GL 10)';
+        const finalDept = profile?.department || meta.department || 'Administration';
+        const finalAvatar = profile?.avatar_url || meta.avatar_url || CURATED_AVATARS[0].url;
+
+        // Ensure profile exists in DB now that user is authenticated
+        if (!profile) {
+          await cloudDatabaseService.upsertProfile({
+            user_id: user.id,
+            full_name: finalName,
+            email: user.email || signInEmail,
+            ministry: meta.ministry || finalMda,
+            agency: finalMda,
+            department: finalDept,
+            cadre: finalCadre,
+            avatar_url: finalAvatar
+          });
+        }
 
         setCompetitionMode('intra_dept');
         loginWithDomain(user.email || signInEmail, finalName, finalMda, finalCadre, finalDept, finalAvatar);
