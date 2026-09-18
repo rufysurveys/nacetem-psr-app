@@ -61,12 +61,18 @@ export const ScheduleTournamentPage: React.FC = () => {
   // Fetch games from Supabase cloud database & merge with local cache
   const loadGames = async () => {
     setIsLoading(true);
-    const localSaved = getSavedLocalGames();
     const remoteGames = await cloudDatabaseService.fetchAvailableGames();
+    const localSaved = getSavedLocalGames();
 
     const mergedMap = new Map<string, GameRecord>();
-    localSaved.forEach(g => mergedMap.set(g.id, g));
+    // Add remote cloud games first
     remoteGames.forEach(g => mergedMap.set(g.id, g));
+    // Add local fallback games only if not present in remote
+    localSaved.forEach(g => {
+      if (!mergedMap.has(g.id)) {
+        mergedMap.set(g.id, g);
+      }
+    });
 
     const mergedList = Array.from(mergedMap.values());
     const finalGames = mergedList.length > 0 ? mergedList : DEFAULT_GAMES;
@@ -78,6 +84,22 @@ export const ScheduleTournamentPage: React.FC = () => {
 
   useEffect(() => {
     loadGames();
+
+    // Auto-poll remote games every 4s for instant cross-device updates
+    const pollInterval = setInterval(() => {
+      cloudDatabaseService.fetchAvailableGames().then(remoteGames => {
+        if (remoteGames.length > 0) {
+          setGames(prev => {
+            const map = new Map<string, GameRecord>();
+            remoteGames.forEach(g => map.set(g.id, g));
+            prev.forEach(g => {
+              if (!map.has(g.id)) map.set(g.id, g);
+            });
+            return Array.from(map.values());
+          });
+        }
+      });
+    }, 4000);
 
     // Supabase Realtime Channel: Listen for games INSERT/UPDATE across devices
     const gamesChannel = supabase
@@ -92,6 +114,7 @@ export const ScheduleTournamentPage: React.FC = () => {
       .subscribe();
 
     return () => {
+      clearInterval(pollInterval);
       supabase.removeChannel(gamesChannel);
     };
   }, []);

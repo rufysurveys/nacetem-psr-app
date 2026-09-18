@@ -4,6 +4,7 @@ import { Tournament } from '../types';
 import { ExtendedCompMode } from '../store/useStore';
 import { FEDERAL_MINISTRIES_AND_AGENCIES } from '../data/ministriesAndAgencies';
 import { X, Trophy, Building2, Globe, Award, ChevronRight, Users } from 'lucide-react';
+import { cloudDatabaseService } from '../services/supabase';
 
 interface Props {
   isOpen: boolean;
@@ -45,13 +46,14 @@ export const ScheduleTournamentModal: React.FC<Props> = ({ isOpen, onClose }) =>
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const targetOrg = selectedAgency && selectedAgency !== `${selectedMinistry} Headquarters` ? selectedAgency : selectedMinistry;
+    const tournTitle = title || `${targetOrg} Championship`;
 
     const newTournament: Tournament = {
       id: `tourn-${Date.now()}`,
-      title: title || `${targetOrg} Championship`,
+      title: tournTitle,
       season: `${competitionMode === 'inter_agency' ? 'National Inter-Agency' : 'Intra-Org'} League 2026`,
       competitionMode: competitionMode === 'inter_agency' ? 'inter' : 'intra',
       targetOrganizationName: competitionMode !== 'inter_agency' ? targetOrg : undefined,
@@ -67,6 +69,24 @@ export const ScheduleTournamentModal: React.FC<Props> = ({ isOpen, onClose }) =>
     };
 
     addTournament(newTournament);
+
+    // Persist game directly to Supabase Cloud DB for cross-device sync
+    try {
+      await cloudDatabaseService.createGame({
+        host_id: user?.id || 'usr-default',
+        title: tournTitle,
+        competition_mode: competitionMode === 'inter_agency' ? 'inter_agency' : 'intra_dept',
+        target_org: targetOrg,
+        start_datetime: `${startDate}T09:00:00Z`,
+        cutoff_datetime: `${startDate}T23:59:59Z`,
+        max_players: 50,
+        status: 'scheduled',
+        description: `Official competition hosted by ${user?.name || 'Civil Servant Officer'}`
+      });
+    } catch (err) {
+      console.warn('Modal create game notice:', err);
+    }
+
     onClose();
   };
 

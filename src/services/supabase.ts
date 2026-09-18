@@ -232,10 +232,10 @@ export const cloudDatabaseService = {
       const { data, error } = await supabase
         .from('games')
         .select('*')
-        .in('status', ['scheduled', 'open', 'full', 'active'])
-        .order('start_datetime', { ascending: true });
+        .neq('status', 'cancelled')
+        .order('created_at', { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         return data as GameRecord[];
       }
     } catch (e) {}
@@ -244,9 +244,28 @@ export const cloudDatabaseService = {
   },
 
   async createGame(game: Omit<GameRecord, 'id' | 'created_at'>): Promise<GameRecord> {
+    const hostId = ensureValidUUID(game.host_id);
+
+    // Auto-ensure host profile exists in public.profiles first to satisfy FK constraint
+    try {
+      await supabase
+        .from('profiles')
+        .upsert({
+          user_id: hostId,
+          full_name: 'Civil Servant Officer',
+          email: 'officer@nacetem.gov.ng',
+          ministry: 'Federal Civil Service',
+          agency: 'National Centre for Technology Management (NACETEM)',
+          department: 'Administration',
+          cadre: 'Senior Executive Officer (GL 10)'
+        }, { onConflict: 'user_id' });
+    } catch (e) {
+      console.warn('Host profile auto-upsert notice:', e);
+    }
+
     const gameToInsert = {
       ...game,
-      host_id: ensureValidUUID(game.host_id)
+      host_id: hostId
     };
 
     try {
