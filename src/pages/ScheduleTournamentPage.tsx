@@ -1,91 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { supabase, cloudDatabaseService, GameRecord } from '../services/supabase';
-import { Calendar, Clock, Trophy, Users, CheckCircle2, Plus, Building2, Sparkles, RefreshCw } from 'lucide-react';
-
-const LOCAL_GAMES_KEY = 'nacetem_psr_scheduled_games_v5';
-
-export const DEFAULT_GAMES: GameRecord[] = [
-  {
-    id: 'sched-01',
-    host_id: '00000000-0000-4000-8000-000000000001',
-    title: '2026 National Inter-Agency Championship',
-    competition_mode: 'inter_agency',
-    target_org: 'National All Agencies',
-    start_datetime: '2026-09-25T09:00:00.000Z',
-    cutoff_datetime: '2026-09-24T23:59:00.000Z',
-    max_players: 50,
-    status: 'scheduled',
-    description: 'Nationwide public service tournament ranking all federal ministries and agencies.',
-    created_at: new Date().toISOString()
-  },
-  {
-    id: 'sched-02',
-    host_id: '00000000-0000-4000-8000-000000000002',
-    title: 'NACETEM Inter-Departmental Challenge Cup',
-    competition_mode: 'intra_dept',
-    target_org: 'National Centre for Technology Management (NACETEM)',
-    start_datetime: '2026-09-20T10:00:00.000Z',
-    cutoff_datetime: '2026-09-19T23:59:00.000Z',
-    max_players: 50,
-    status: 'scheduled',
-    description: 'Departmental challenge inside NACETEM testing PPL, Research, Technology Transfer, and Finance officers.',
-    created_at: new Date().toISOString()
-  }
-];
+import { Calendar, Clock, Trophy, Users, CheckCircle2, Plus, Building2, Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
 
 export const ScheduleTournamentPage: React.FC = () => {
-  const { user, setActivePage, setSelectedOpponent } = useStore();
+  const { user, setActivePage, setSelectedOpponent, dbGames, isLoadingGames, gamesError, fetchCloudGames } = useStore();
 
-  const [games, setGames] = useState<GameRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-
-  // Fetch scheduled tournaments directly from Supabase Central Database
-  const loadGames = async () => {
-    setIsLoading(true);
-    setErrorMessage(null);
-    try {
-      const remoteGames = await cloudDatabaseService.fetchAvailableGames();
-      setGames(remoteGames);
-    } catch (err: any) {
-      console.error('Failed to load tournaments from central database:', err);
-      setErrorMessage(err.message || 'Could not load scheduled tournaments from central database.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadGames();
-
-    // Background polling every 4s for instant cross-device updates
-    const pollInterval = setInterval(() => {
-      cloudDatabaseService.fetchAvailableGames().then(remoteGames => {
-        setGames(remoteGames);
-      }).catch(err => {
-        console.warn('Background games poll notice:', err);
-      });
-    }, 4000);
-
-    // Supabase Realtime Channel: Listen for games INSERT/UPDATE across devices
-    const gamesChannel = supabase
-      .channel('public:games:schedule')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'games' },
-        () => {
-          loadGames();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      clearInterval(pollInterval);
-      supabase.removeChannel(gamesChannel);
-    };
-  }, []);
+    fetchCloudGames();
+  }, [fetchCloudGames]);
 
   const [title, setTitle] = useState('2026 PSR Inter-Agency Championship');
   const [competitionMode, setCompMode] = useState<'intra_dept' | 'inter_agency'>('intra_dept');
@@ -94,7 +20,6 @@ export const ScheduleTournamentPage: React.FC = () => {
   const [cutoffDateTime, setCutoffDateTime] = useState('2026-09-21T23:59');
   const [description, setDescription] = useState('Official competition testing Public Service Rules mastery across federal agencies.');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [scheduleError, setScheduleError] = useState<string | null>(null);
 
   const handleCreateSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,8 +47,8 @@ export const ScheduleTournamentPage: React.FC = () => {
       // Join host as player
       await cloudDatabaseService.joinGame(createdGame.id, hostUserId);
 
-      // Re-query database to show new game
-      await loadGames();
+      // Re-query database to show new game across store
+      await fetchCloudGames();
       setIsModalOpen(false);
     } catch (err: any) {
       console.error('Schedule creation failed:', err);
@@ -162,11 +87,11 @@ export const ScheduleTournamentPage: React.FC = () => {
               <span>Live Cloud Sync Active</span>
             </div>
             <button
-              onClick={loadGames}
+              onClick={fetchCloudGames}
               title="Refresh Remote Schedules"
               className="p-1 rounded-full bg-white/10 hover:bg-white/20 text-emerald-300 transition-all flex items-center justify-center"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingGames ? 'animate-spin' : ''}`} />
             </button>
           </div>
 
@@ -204,6 +129,13 @@ export const ScheduleTournamentPage: React.FC = () => {
                 ✕
               </button>
             </div>
+
+            {scheduleError && (
+              <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold p-3 rounded-xl flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                <span>{scheduleError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleCreateSchedule} className="space-y-4 text-xs">
               <div>
@@ -298,13 +230,24 @@ export const ScheduleTournamentPage: React.FC = () => {
         </div>
       )}
 
+      {/* ERROR BANNER IF DATABASE ERROR */}
+      {gamesError && (
+        <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold p-4 rounded-2xl flex items-center gap-3">
+          <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
+          <div>
+            <p className="font-extrabold text-sm">Central Database Connection Error</p>
+            <p className="text-xs text-rose-700 mt-0.5">{gamesError}</p>
+          </div>
+        </div>
+      )}
+
       {/* GAMES GRID */}
-      {isLoading ? (
+      {isLoadingGames ? (
         <div className="py-12 text-center text-slate-500 flex flex-col items-center gap-2">
           <RefreshCw className="w-6 h-6 animate-spin text-emerald-600" />
           <span>Syncing scheduled competitions...</span>
         </div>
-      ) : games.length === 0 ? (
+      ) : dbGames.length === 0 ? (
         <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 space-y-4 shadow-sm">
           <Calendar className="w-12 h-12 text-slate-300 mx-auto" />
           <h3 className="text-lg font-bold text-slate-800">No Scheduled Tournaments Yet</h3>
@@ -314,7 +257,7 @@ export const ScheduleTournamentPage: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {games.map((g) => (
+          {dbGames.map((g) => (
             <div
               key={g.id}
               className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"

@@ -6,43 +6,21 @@ import { supabase, cloudDatabaseService, GameRecord } from '../services/supabase
 import { Trophy, Clock, CheckCircle2, Play, Award, Zap, Building2, Globe, Plus, Calendar, Swords, Users } from 'lucide-react';
 
 export const TournamentHub: React.FC = () => {
-  const { activeTournament, startTournamentStage, competitionMode, setCompetitionMode, user, questions, setActivePage, setSelectedOpponent } = useStore();
+  const { 
+    activeTournament, 
+    startTournamentStage, 
+    competitionMode, 
+    setCompetitionMode, 
+    user, 
+    questions, 
+    setActivePage, 
+    setSelectedOpponent,
+    dbGames,
+    isLoadingGames,
+    gamesError
+  } = useStore();
 
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
-  const [scheduledGames, setScheduledGames] = useState<GameRecord[]>([]);
-  const [isLoadingGames, setIsLoadingGames] = useState(true);
-
-  // Load Live Scheduled Competitions from Supabase Cloud Database
-  const loadCloudGames = async () => {
-    setIsLoadingGames(true);
-    const games = await cloudDatabaseService.fetchAvailableGames();
-    setScheduledGames(games);
-    setIsLoadingGames(false);
-  };
-
-  useEffect(() => {
-    loadCloudGames();
-
-    // 3-second background polling for instant cross-device updates across Nigeria
-    const pollInterval = setInterval(() => {
-      cloudDatabaseService.fetchAvailableGames().then(games => {
-        if (games) setScheduledGames(games);
-      });
-    }, 3000);
-
-    // Supabase Realtime WebSocket subscription
-    const channel = supabase
-      .channel('public:games:hub')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'games' }, () => {
-        loadCloudGames();
-      })
-      .subscribe();
-
-    return () => {
-      clearInterval(pollInterval);
-      supabase.removeChannel(channel);
-    };
-  }, []);
 
   if (!activeTournament) return null;
 
@@ -179,7 +157,7 @@ export const TournamentHub: React.FC = () => {
           </button>
         </div>
 
-        {scheduledGames.length === 0 ? (
+        {dbGames.length === 0 ? (
           <div className="p-8 bg-white border border-slate-200 rounded-3xl text-center space-y-3 shadow-sm">
             <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
               <Calendar className="w-6 h-6" />
@@ -198,7 +176,7 @@ export const TournamentHub: React.FC = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {scheduledGames.map(game => {
+            {dbGames.map(game => {
               const isHost = game.host_id === user?.id;
               return (
                 <div key={game.id} className="bright-card p-5 rounded-3xl space-y-4 border-slate-200 hover:border-emerald-500/50 transition-all flex flex-col justify-between shadow-sm bg-white hover:shadow-md">

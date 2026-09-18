@@ -3,6 +3,8 @@ import { UserProfile, Question, Tournament, LeaderboardEntry, AntiCheatLog, MDA,
 import { INITIAL_USER, INITIAL_QUESTIONS, INITIAL_TOURNAMENTS, INITIAL_LEADERBOARD, INITIAL_ANTI_CHEAT_LOGS, INITIAL_MDAS, INITIAL_CHAPTER_ANALYTICS } from '../data/mockData';
 import { cloudSyncService } from '../services/cloudSync';
 
+import { cloudDatabaseService, GameRecord } from '../services/supabase';
+
 export type ActivePage = 'tournaments' | 'schedule' | 'remotematch' | 'quiz' | 'knockout' | 'sjt' | 'practice' | 'leaderboard' | 'profile' | 'admin';
 export type ExtendedCompMode = 'intra_dept' | 'inter_agency';
 
@@ -32,6 +34,12 @@ interface AppState {
   // Competition Mode
   competitionMode: ExtendedCompMode;
   setCompetitionMode: (mode: ExtendedCompMode) => void;
+
+  // Central Database Games State (Single Source of Truth)
+  dbGames: GameRecord[];
+  isLoadingGames: boolean;
+  gamesError: string | null;
+  fetchCloudGames: () => Promise<void>;
 
   // Data Collections
   mdas: MDA[];
@@ -80,6 +88,20 @@ export const useStore = create<AppState>((set, get) => ({
 
   competitionMode: 'intra_dept',
   setCompetitionMode: (mode) => set({ competitionMode: mode }),
+
+  // Central Database Games State
+  dbGames: [],
+  isLoadingGames: false,
+  gamesError: null,
+  fetchCloudGames: async () => {
+    try {
+      const games = await cloudDatabaseService.fetchAvailableGames();
+      set({ dbGames: games, gamesError: null });
+    } catch (err: any) {
+      console.error('Zustand fetchCloudGames error:', err);
+      set({ gamesError: err.message || 'Failed to fetch tournaments from central database.' });
+    }
+  },
 
   mdas: INITIAL_MDAS,
   questions: INITIAL_QUESTIONS,
