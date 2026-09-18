@@ -6,7 +6,6 @@ export const Navbar: React.FC = () => {
   const { activePage, setActivePage, user, logout, competitionMode, setCompetitionMode } = useStore();
 
   const essentialNavItems: { id: ActivePage; label: string; icon: React.ReactNode }[] = [
-    { id: 'tournaments', label: 'Tournament Hub', icon: <Trophy className="w-4 h-4" /> },
     { id: 'schedule', label: 'Scheduled Tournaments', icon: <Calendar className="w-4 h-4" /> },
     { id: 'practice', label: 'Practice (958 Qs)', icon: <BookOpen className="w-4 h-4" /> },
     { id: 'leaderboard', label: 'Leaderboards', icon: <BarChart3 className="w-4 h-4" /> },
@@ -19,7 +18,7 @@ export const Navbar: React.FC = () => {
         
         {/* Brand Logo */}
         <div 
-          onClick={() => setActivePage('tournaments')}
+          onClick={() => setActivePage('schedule')}
           className="flex items-center gap-2.5 cursor-pointer group"
         >
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 p-0.5 shadow-md group-hover:scale-105 transition-transform">
@@ -69,7 +68,7 @@ export const Navbar: React.FC = () => {
         <nav className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
           {essentialNavItems.map((item) => {
             const isActive = activePage === item.id || 
-              (item.id === 'tournaments' && (activePage === 'quiz' || activePage === 'knockout' || activePage === 'sjt'));
+              (item.id === 'schedule' && (activePage === 'quiz' || activePage === 'knockout' || activePage === 'sjt' || activePage === 'remotematch'));
 
             return (
               <button

@@ -268,10 +268,10 @@ export const QuizRunner: React.FC = () => {
 
           <div className="flex justify-center gap-3 pt-4">
             <button
-              onClick={() => setActivePage('tournaments')}
+              onClick={() => setActivePage('schedule')}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 py-3 rounded-2xl text-xs shadow-md transition-all"
             >
-              Return to Tournament Hub
+              Return to Scheduled Tournaments
             </button>
           </div>
         </div>

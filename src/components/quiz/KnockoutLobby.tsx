@@ -79,7 +79,7 @@ export const KnockoutLobby: React.FC = () => {
           </div>
 
           <button
-            onClick={() => setActivePage('tournaments')}
+            onClick={() => setActivePage('schedule')}
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl text-sm transition-all shadow-md"
           >
             Proceed to Stage 3: Grand Finale

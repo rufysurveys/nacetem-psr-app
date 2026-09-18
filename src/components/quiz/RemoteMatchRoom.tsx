@@ -183,15 +183,9 @@ export const RemoteMatchRoom: React.FC = () => {
           <div className="flex justify-center gap-3 pt-4">
             <button
               onClick={() => setActivePage('schedule')}
-              className="bg-slate-900 hover:bg-slate-800 text-white font-extrabold px-6 py-3 rounded-2xl text-xs shadow-md transition-all"
-            >
-              Back to Scheduled Hub
-            </button>
-            <button
-              onClick={() => setActivePage('tournaments')}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 py-3 rounded-2xl text-xs shadow-md transition-all"
             >
-              Proceed to Tournament Hub
+              Return to Scheduled Tournaments
             </button>
           </div>
         </div>

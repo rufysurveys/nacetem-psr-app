@@ -3,7 +3,6 @@ import { useStore, ScheduledTournamentItem } from './store/useStore';
 import { cloudSyncService } from './services/cloudSync';
 import { Navbar } from './components/Navbar';
 import { AuthPage } from './pages/AuthPage';
-import { TournamentHub } from './pages/TournamentHub';
 import { QuizRunner } from './components/quiz/QuizRunner';
 import { KnockoutLobby } from './components/quiz/KnockoutLobby';
 import { SJTViewer } from './components/quiz/SJTViewer';
@@ -85,7 +84,6 @@ export const App: React.FC = () => {
         <Navbar />
 
         <main>
-          {activePage === 'tournaments' && <TournamentHub />}
           {activePage === 'schedule' && <ScheduleTournamentPage />}
           {activePage === 'remotematch' && <RemoteMatchRoom />}
           {activePage === 'quiz' && <QuizRunner />}

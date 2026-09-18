@@ -5,7 +5,7 @@ import { cloudSyncService } from '../services/cloudSync';
 
 import { cloudDatabaseService, GameRecord } from '../services/supabase';
 
-export type ActivePage = 'tournaments' | 'schedule' | 'remotematch' | 'quiz' | 'knockout' | 'sjt' | 'practice' | 'leaderboard' | 'profile' | 'admin';
+export type ActivePage = 'schedule' | 'remotematch' | 'quiz' | 'knockout' | 'sjt' | 'practice' | 'leaderboard' | 'profile' | 'admin';
 export type ExtendedCompMode = 'intra_dept' | 'inter_agency';
 
 export interface ScheduledTournamentItem {
@@ -79,7 +79,7 @@ interface AppState {
 }
 
 export const useStore = create<AppState>((set, get) => ({
-  activePage: 'tournaments',
+  activePage: 'schedule',
   setActivePage: (page) => set({ activePage: page }),
   user: null,
   setUser: (user) => set({ user }),
@@ -150,7 +150,7 @@ export const useStore = create<AppState>((set, get) => ({
       role: 'user'
     };
 
-    set({ user: newUser, activePage: 'tournaments' });
+    set({ user: newUser, activePage: 'schedule' });
   },
 
   updateUserProfile: (updates) => {
@@ -161,7 +161,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   logout: () => {
-    set({ user: null, activePage: 'tournaments' });
+    set({ user: null, activePage: 'schedule' });
   },
 
   startTournamentStage: (tournamentId, stageNumber) => {
