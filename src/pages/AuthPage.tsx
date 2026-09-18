@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { CadreRank } from '../types';
 import { FEDERAL_MINISTRIES_AND_AGENCIES } from '../data/ministriesAndAgencies';
@@ -87,6 +87,30 @@ export const AuthPage: React.FC = () => {
     }
   };
 
+  // Listen for Email Confirmation Link Redirects (#access_token=... & type=signup)
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash.includes('access_token') || hash.includes('type=signup') || hash.includes('type=recovery')) {
+      setRegStep('verified_success');
+      // Attempt session fetch
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session?.user) {
+          const u = data.session.user;
+          const meta = u.user_metadata || {};
+          const name = meta.full_name || u.email?.split('@')[0] || 'Civil Servant';
+          const mda = meta.agency || meta.ministry || 'Federal Civil Service';
+          const cadre = meta.cadre || 'Senior Executive Officer (GL 10)';
+          const dept = meta.department || 'Administration';
+          const avatar = meta.avatar_url || CURATED_AVATARS[0].url;
+
+          setTimeout(() => {
+            loginWithDomain(u.email || '', name, mda, cadre, dept, avatar);
+          }, 2000);
+        }
+      });
+    }
+  }, [loginWithDomain]);
+
   // REAL SUPABASE SIGN UP SUBMIT
   const handleSignUpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,12 +123,16 @@ export const AuthPage: React.FC = () => {
     setIsSubmitting(true);
 
     try {
+      const redirectUrl = window.location.origin.includes('localhost') 
+        ? window.location.origin 
+        : 'https://psr-gamification-app.vercel.app';
+
       // 1. Supabase Auth Sign Up (Triggers real confirmation email dispatch)
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: window.location.origin,
+          emailRedirectTo: redirectUrl,
           data: {
             full_name: name,
             ministry: selectedMinistry,
@@ -618,6 +646,38 @@ export const AuthPage: React.FC = () => {
                         <span>Resend Email Link</span>
                       </button>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* VERIFIED SUCCESS CONGRATULATIONS SCREEN */}
+              {regStep === 'verified_success' && (
+                <div className="space-y-6 animate-fadeIn text-center py-8">
+                  <div className="w-20 h-20 rounded-full bg-emerald-600 text-white flex items-center justify-center mx-auto shadow-2xl animate-bounce border-4 border-emerald-400">
+                    <CheckCircle2 className="w-10 h-10" />
+                  </div>
+
+                  <div className="space-y-2">
+                    <span className="px-3.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black uppercase tracking-wider border border-emerald-300">
+                      🎉 REGISTRATION COMPLETE &amp; VERIFIED
+                    </span>
+                    <h2 className="text-3xl font-black text-slate-900 mt-2">Congratulations! Account Verified</h2>
+                    <p className="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">
+                      Your official civil servant officer profile has been verified and registered in the Cloud Database.
+                    </p>
+                  </div>
+
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthTab('signin');
+                        setRegStep('form');
+                      }}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-8 py-3.5 rounded-2xl text-xs shadow-lg transition-all border border-emerald-500"
+                    >
+                      <span>Proceed to Sign In &amp; Dashboard →</span>
+                    </button>
                   </div>
                 </div>
               )}
