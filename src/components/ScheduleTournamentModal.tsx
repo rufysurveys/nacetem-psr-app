@@ -12,7 +12,7 @@ interface Props {
 }
 
 export const ScheduleTournamentModal: React.FC<Props> = ({ isOpen, onClose }) => {
-  const { user, addTournament, tournaments } = useStore();
+  const { user, fetchCloudGames } = useStore();
 
   const [title, setTitle] = useState('');
   const [competitionMode, setCompMode] = useState<ExtendedCompMode>('intra_dept');
@@ -51,33 +51,14 @@ export const ScheduleTournamentModal: React.FC<Props> = ({ isOpen, onClose }) =>
     const targetOrg = selectedAgency && selectedAgency !== `${selectedMinistry} Headquarters` ? selectedAgency : selectedMinistry;
     const tournTitle = title || `${targetOrg} Championship`;
 
-    const newTournament: Tournament = {
-      id: `tourn-${Date.now()}`,
-      title: tournTitle,
-      season: `${competitionMode === 'inter_agency' ? 'National Inter-Agency' : 'Intra-Org'} League 2026`,
-      competitionMode: competitionMode === 'inter_agency' ? 'inter' : 'intra',
-      targetOrganizationName: competitionMode !== 'inter_agency' ? targetOrg : undefined,
-      createdBy: user?.name || 'Administrator',
-      startDate: `${startDate}T09:00:00Z`,
-      endDate: `${endDate}T17:00:00Z`,
-      registrationCutoff: `${startDate}T23:59:59Z`,
-      totalRegistered: 1,
-      currentStage: 1,
-      status: 'active',
-      winnerBadgeTitle: winnerBadge || '🏆 Championship Winner Badge',
-      stages: tournaments[0]?.stages || []
-    };
-
-    addTournament(newTournament);
-
-    // Persist game directly to Supabase Cloud DB for cross-device sync
     try {
       if (!user?.id) {
         alert('You must be signed in to schedule a competition.');
         return;
       }
 
-      await cloudDatabaseService.createGame({
+      // 1. Create game directly in Supabase Cloud DB
+      const createdGame = await cloudDatabaseService.createGame({
         host_id: user.id,
         title: tournTitle,
         competition_mode: competitionMode === 'inter_agency' ? 'inter_agency' : 'intra_dept',
@@ -88,13 +69,14 @@ export const ScheduleTournamentModal: React.FC<Props> = ({ isOpen, onClose }) =>
         status: 'scheduled',
         description: `Official competition hosted by ${user.name}`
       });
+
+      // 2. Refresh central dbGames from Supabase
+      await fetchCloudGames();
+      onClose();
     } catch (err: any) {
       console.error('Modal create game error:', err);
       alert(`Could not create tournament in central database: ${err.message}`);
-      return;
     }
-
-    onClose();
   };
 
   return (

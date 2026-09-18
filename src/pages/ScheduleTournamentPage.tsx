@@ -258,7 +258,9 @@ export const ScheduleTournamentPage: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {dbGames.map((g) => {
-            const isHost = user?.id === g.host_id;
+            const isAdminNoHost = g.host_id === null;
+            const isHost = !isAdminNoHost && user?.id === g.host_id;
+
             return (
               <div
                 key={g.id}
@@ -277,7 +279,11 @@ export const ScheduleTournamentPage: React.FC = () => {
 
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-extrabold text-slate-900">{g.title}</h3>
-                    {isHost ? (
+                    {isAdminNoHost ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-300 flex items-center gap-1">
+                        🌐 Admin Scheduled (No Host)
+                      </span>
+                    ) : isHost ? (
                       <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
                         👑 Host
                       </span>
@@ -319,7 +325,13 @@ export const ScheduleTournamentPage: React.FC = () => {
                     }`}
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>{isHost ? '👑 Host Match Room →' : '⚔️ Accept Challenge & Join as Guest →'}</span>
+                    <span>
+                      {isAdminNoHost
+                        ? '⚔️ Join Challenge / Enter Match Room →'
+                        : isHost
+                        ? '👑 Host Match Room →'
+                        : '⚔️ Accept Challenge & Join as Guest →'}
+                    </span>
                   </button>
                 </div>
               </div>

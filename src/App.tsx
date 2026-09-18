@@ -41,27 +41,12 @@ export const App: React.FC = () => {
     });
   }, [loginWithDomain]);
 
-  // 2. Continuous global background cloud sync across all devices via Supabase
+  // 2. Continuous global background cloud sync across all devices via Supabase -> dbGames
+  const { fetchCloudGames } = useStore();
   useEffect(() => {
     const syncTournaments = async () => {
       try {
-        const dbGames = await cloudDatabaseService.fetchAvailableGames();
-        if (dbGames) {
-          const mappedItems: ScheduledTournamentItem[] = dbGames.map(g => ({
-            id: g.id,
-            title: g.title,
-            competitionMode: g.competition_mode,
-            targetOrg: g.target_org,
-            startDateTime: g.start_datetime,
-            cutoffDateTime: g.cutoff_datetime,
-            winnerBadgeTitle: '🏆 Championship Winner Badge',
-            registeredCount: g.max_players,
-            isSubscribed: true,
-            createdBy: g.host_id,
-            description: g.description || 'Public Service Rules tournament.'
-          }));
-          setScheduledTournaments(mappedItems);
-        }
+        await fetchCloudGames();
       } catch (err) {
         console.warn('App background sync notice:', err);
       }
@@ -70,7 +55,7 @@ export const App: React.FC = () => {
     syncTournaments();
     const intervalId = setInterval(syncTournaments, 3000);
     return () => clearInterval(intervalId);
-  }, [setScheduledTournaments]);
+  }, [fetchCloudGames]);
 
   // FIRST POINT OF CONTACT: Sign Up / Sign In Page if unauthenticated
   if (!user) {

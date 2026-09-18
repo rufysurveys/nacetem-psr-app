@@ -43,30 +43,13 @@ export const DEFAULT_SCHEDULED_TOURNAMENTS: ScheduledTournamentItem[] = [
 ];
 
 export const cloudSyncService = {
-  // Read cached items from LocalStorage
+  // Deprecated local storage methods — Supabase is the single source of truth
   getSavedLocalTournaments(): ScheduledTournamentItem[] {
-    try {
-      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.warn('LocalStorage error:', e);
-    }
-    return DEFAULT_SCHEDULED_TOURNAMENTS;
+    return [];
   },
 
-  // Save items to LocalStorage & broadcast to other local tabs
-  saveLocalTournaments(items: ScheduledTournamentItem[]) {
-    try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(items));
-      if (broadcastChannel) {
-        broadcastChannel.postMessage({ type: 'SCHEDULE_UPDATED', items });
-      }
-    } catch (e) {
-      console.warn('LocalStorage save error:', e);
-    }
+  saveLocalTournaments(_items: ScheduledTournamentItem[]) {
+    // No-op: Supabase is the sole authoritative store
   },
 
   // Listen for broadcast updates from other tabs

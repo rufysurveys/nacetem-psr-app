@@ -32,7 +32,7 @@ export interface ProfileRecord {
 
 export interface GameRecord {
   id: string;
-  host_id: string;
+  host_id: string | null;
   title: string;
   competition_mode: 'intra_dept' | 'inter_agency';
   target_org: string;
@@ -243,14 +243,31 @@ export const cloudDatabaseService = {
   },
 
   async createGame(game: Omit<GameRecord, 'id' | 'created_at'>): Promise<GameRecord> {
-    const hostId = ensureValidUUID(game.host_id);
+    const isHostPresent = Boolean(game.host_id);
+    const validHostId = isHostPresent ? ensureValidUUID(game.host_id!) : null;
+
+    if (validHostId) {
+      // 1. Ensure Host Profile exists in public.profiles before FK constraint check
+      const existingProfile = await this.fetchProfileByUserId(validHostId);
+      if (!existingProfile) {
+        await this.upsertProfile({
+          user_id: validHostId,
+          full_name: 'Civil Servant Officer',
+          email: `officer_${validHostId.slice(0, 8)}@gov.ng`,
+          ministry: 'Federal Civil Service',
+          agency: game.target_org || 'Federal Civil Service Headquarters',
+          department: 'Administration',
+          cadre: 'Senior Executive Officer (GL 10)'
+        });
+      }
+    }
 
     const gameToInsert = {
       ...game,
-      host_id: hostId
+      host_id: validHostId
     };
 
-    // 1. Insert Game into central Supabase database
+    // 2. Insert Game into central Supabase database
     const { data, error } = await supabase
       .from('games')
       .insert(gameToInsert)
@@ -264,16 +281,18 @@ export const cloudDatabaseService = {
 
     const createdGame = data as GameRecord;
 
-    // 2. Automatically insert Host into game_players relationship table
-    try {
-      await supabase.from('game_players').insert({
-        game_id: createdGame.id,
-        user_id: hostId,
-        status: 'joined',
-        current_score: 0
-      });
-    } catch (e) {
-      console.warn('Host auto-join relationship warning:', e);
+    // 3. Automatically insert Host into game_players relationship table if regular host tournament
+    if (validHostId) {
+      try {
+        await supabase.from('game_players').insert({
+          game_id: createdGame.id,
+          user_id: validHostId,
+          status: 'joined',
+          current_score: 0
+        });
+      } catch (e) {
+        console.warn('Host auto-join relationship warning:', e);
+      }
     }
 
     return createdGame;
