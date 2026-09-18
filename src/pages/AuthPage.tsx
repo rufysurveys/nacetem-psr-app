@@ -104,7 +104,7 @@ export const AuthPage: React.FC = () => {
           const avatar = meta.avatar_url || CURATED_AVATARS[0].url;
 
           setTimeout(() => {
-            loginWithDomain(u.email || '', name, mda, cadre, dept, avatar);
+            loginWithDomain(u.email || '', name, mda, cadre, dept, avatar, u.id);
           }, 2000);
         }
       });
@@ -184,7 +184,7 @@ export const AuthPage: React.FC = () => {
       // If Supabase auto-confirmed or session is present, log in immediately
       if (data.session) {
         setCompetitionMode('intra_dept');
-        loginWithDomain(email, name, fullOrgName, selectedCadre, department || 'Administration', finalAvatarUrl);
+        loginWithDomain(email, name, fullOrgName, selectedCadre, department || 'Administration', finalAvatarUrl, user.id);
         return;
       }
 
@@ -275,7 +275,7 @@ export const AuthPage: React.FC = () => {
         }
 
         setCompetitionMode('intra_dept');
-        loginWithDomain(user.email || signInEmail, finalName, finalMda, finalCadre, finalDept, finalAvatar);
+        loginWithDomain(user.email || signInEmail, finalName, finalMda, finalCadre, finalDept, finalAvatar, user.id);
       }
     } catch (err: any) {
       setSignInError(err.message || 'Authentication error.');
@@ -292,7 +292,8 @@ export const AuthPage: React.FC = () => {
       'National Centre for Technology Management (NACETEM)', 
       'Assistant Director (GL 15)', 
       'Planning, Programming and Linkages',
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200'
+      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+      '7558f96c-c978-44b4-874b-124ea47dadb6'
     );
   };
 

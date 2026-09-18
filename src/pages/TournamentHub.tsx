@@ -1,13 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore, ExtendedCompMode } from '../store/useStore';
 import { ScheduleTournamentModal } from '../components/ScheduleTournamentModal';
 import { DGWelcomeBanner } from '../components/DGWelcomeBanner';
-import { Trophy, Clock, CheckCircle2, Play, Award, Zap, Building2, Globe, Plus } from 'lucide-react';
+import { supabase, cloudDatabaseService, GameRecord } from '../services/supabase';
+import { Trophy, Clock, CheckCircle2, Play, Award, Zap, Building2, Globe, Plus, Calendar, Swords, Users } from 'lucide-react';
 
 export const TournamentHub: React.FC = () => {
-  const { activeTournament, startTournamentStage, competitionMode, setCompetitionMode, user, questions, setActivePage } = useStore();
+  const { activeTournament, startTournamentStage, competitionMode, setCompetitionMode, user, questions, setActivePage, setSelectedOpponent } = useStore();
 
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [scheduledGames, setScheduledGames] = useState<GameRecord[]>([]);
+  const [isLoadingGames, setIsLoadingGames] = useState(true);
+
+  // Load Live Scheduled Competitions from Supabase Cloud Database
+  const loadCloudGames = async () => {
+    setIsLoadingGames(true);
+    const games = await cloudDatabaseService.fetchAvailableGames();
+    setScheduledGames(games);
+    setIsLoadingGames(false);
+  };
+
+  useEffect(() => {
+    loadCloudGames();
+
+    // 3-second background polling for instant cross-device updates across Nigeria
+    const pollInterval = setInterval(() => {
+      cloudDatabaseService.fetchAvailableGames().then(games => {
+        if (games) setScheduledGames(games);
+      });
+    }, 3000);
+
+    // Supabase Realtime WebSocket subscription
+    const channel = supabase
+      .channel('public:games:hub')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'games' }, () => {
+        loadCloudGames();
+      })
+      .subscribe();
+
+    return () => {
+      clearInterval(pollInterval);
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   if (!activeTournament) return null;
 
@@ -112,6 +147,127 @@ export const TournamentHub: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* LIVE SCHEDULED COMPETITIONS & OPEN CHALLENGES (CROSS-DEVICE CLOUD SYNC) */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-2 rounded-xl bg-amber-50 text-amber-700 font-bold border border-amber-200">
+              <Swords className="w-5 h-5 text-amber-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+                <span>Live Scheduled Competitions &amp; Open Challenges</span>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 text-[10px] font-black uppercase">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                  Nationwide Cloud Sync
+                </span>
+              </h2>
+              <p className="text-xs text-slate-500">
+                Competitions scheduled across devices (Lagos, Abuja, etc.). Click <strong>Accept Challenge</strong> to join as Guest!
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => setActivePage('schedule')}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs px-4 py-2 rounded-xl shadow-sm transition-all flex items-center gap-1.5 self-start sm:self-auto shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Schedule New Tournament</span>
+          </button>
+        </div>
+
+        {scheduledGames.length === 0 ? (
+          <div className="p-8 bg-white border border-slate-200 rounded-3xl text-center space-y-3 shadow-sm">
+            <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+              <Calendar className="w-6 h-6" />
+            </div>
+            <h3 className="text-sm font-extrabold text-slate-900">No scheduled competitions active right now</h3>
+            <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+              Schedule a tournament for your department or federal agency. All logged-in officers across Nigeria will see it on their dashboard and can join your challenge!
+            </p>
+            <button
+              onClick={() => setActivePage('schedule')}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold px-5 py-2.5 rounded-xl shadow-md transition-all inline-flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Schedule First Tournament</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {scheduledGames.map(game => {
+              const isHost = game.host_id === user?.id;
+              return (
+                <div key={game.id} className="bright-card p-5 rounded-3xl space-y-4 border-slate-200 hover:border-emerald-500/50 transition-all flex flex-col justify-between shadow-sm bg-white hover:shadow-md">
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold uppercase border ${
+                        game.competition_mode === 'inter_agency' 
+                          ? 'bg-purple-50 text-purple-800 border-purple-200' 
+                          : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      }`}>
+                        {game.competition_mode === 'inter_agency' ? '🌐 Inter-Agency' : '🏢 Intra-Dept'}
+                      </span>
+                      <span className="text-[11px] text-slate-500 font-semibold flex items-center gap-1 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
+                        <Clock className="w-3.5 h-3.5 text-amber-500" />
+                        {new Date(game.start_datetime).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h3 className="text-base font-extrabold text-slate-900 leading-snug">{game.title}</h3>
+                      <p className="text-xs text-slate-600 mt-1 line-clamp-2 leading-relaxed">
+                        {game.description || `Official public service challenge testing PSR mastery.`}
+                      </p>
+                    </div>
+
+                    <div className="bg-slate-50 p-2.5 rounded-2xl border border-slate-200/80 text-xs space-y-1">
+                      <div className="flex justify-between items-center text-slate-600">
+                        <span className="text-[11px] font-medium">Target Org:</span>
+                        <strong className="text-slate-800 font-bold text-[11px] truncate max-w-[170px]">{game.target_org}</strong>
+                      </div>
+                      <div className="flex justify-between items-center text-slate-600">
+                        <span className="text-[11px] font-medium">Status:</span>
+                        <span className="inline-flex items-center gap-1 font-bold text-[11px] text-emerald-700">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          Open for Opponent
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-slate-100">
+                    <button
+                      onClick={async () => {
+                        if (user) {
+                          await cloudDatabaseService.joinGame(game.id, user.id);
+                        }
+                        setSelectedOpponent({
+                          gameId: game.id,
+                          title: game.title,
+                          targetOrg: game.target_org,
+                          competitionMode: game.competition_mode
+                        });
+                        setActivePage('remotematch');
+                      }}
+                      className={`w-full py-3 rounded-xl text-xs font-extrabold shadow-md transition-all flex items-center justify-center gap-2 ${
+                        isHost 
+                          ? 'bg-amber-600 hover:bg-amber-700 text-white border border-amber-500' 
+                          : 'bg-emerald-600 hover:bg-emerald-700 text-white border border-emerald-500'
+                      }`}
+                    >
+                      <Swords className="w-4 h-4" />
+                      <span>{isHost ? '👑 Host Match Room (Waiting for Opponent) →' : '⚔️ Accept Challenge & Join as Guest →'}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* 3 STAGES GRID */}

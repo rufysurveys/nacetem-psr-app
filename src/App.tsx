@@ -15,43 +15,35 @@ import { ScheduleTournamentPage } from './pages/ScheduleTournamentPage';
 import { RemoteMatchRoom } from './components/quiz/RemoteMatchRoom';
 import { Shield } from 'lucide-react';
 
+import { cloudDatabaseService } from './services/supabase';
+
 export const App: React.FC = () => {
   const { user, activePage, setScheduledTournaments } = useStore();
 
-  // Continuous global background cloud sync across all devices (Abuja <-> Lagos)
+  // Continuous global background cloud sync across all devices (Abuja <-> Lagos) via Supabase
   useEffect(() => {
     const syncTournaments = async () => {
-      const remoteList = await cloudSyncService.fetchCloudTournaments();
-      if (remoteList && remoteList.length > 0) {
-        const currentList = useStore.getState().scheduledTournaments;
-        const mergedMap = new Map<string, ScheduledTournamentItem>();
-
-        currentList.forEach(item => mergedMap.set(item.id, item));
-        remoteList.forEach(item => {
-          const existing = mergedMap.get(item.id);
-          if (existing) {
-            mergedMap.set(item.id, {
-              ...item,
-              isSubscribed: existing.isSubscribed || item.isSubscribed,
-              registeredCount: Math.max(existing.registeredCount, item.registeredCount)
-            });
-          } else {
-            mergedMap.set(item.id, item);
-          }
-        });
-
-        const sortedMerged = Array.from(mergedMap.values());
-        setScheduledTournaments(sortedMerged);
+      const dbGames = await cloudDatabaseService.fetchAvailableGames();
+      if (dbGames && dbGames.length > 0) {
+        const mappedItems: ScheduledTournamentItem[] = dbGames.map(g => ({
+          id: g.id,
+          title: g.title,
+          competitionMode: g.competition_mode,
+          targetOrg: g.target_org,
+          startDateTime: g.start_datetime,
+          cutoffDateTime: g.cutoff_datetime,
+          winnerBadgeTitle: '🏆 Championship Winner Badge',
+          registeredCount: g.max_players,
+          isSubscribed: true,
+          createdBy: g.host_id,
+          description: g.description || 'Public Service Rules tournament.'
+        }));
+        setScheduledTournaments(mappedItems);
       }
     };
 
     syncTournaments();
-
-    cloudSyncService.onBroadcastUpdate((items) => {
-      setScheduledTournaments(items);
-    });
-
-    const intervalId = setInterval(syncTournaments, 2000);
+    const intervalId = setInterval(syncTournaments, 3000);
     return () => clearInterval(intervalId);
   }, [setScheduledTournaments]);
 

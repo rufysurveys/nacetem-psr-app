@@ -55,7 +55,7 @@ interface AppState {
   setSelectedOpponent: (opponent: any | null) => void;
 
   // Actions
-  loginWithDomain: (email: string, name: string, mdaName: string, cadre: any, department?: string, avatar?: string) => void;
+  loginWithDomain: (email: string, name: string, mdaName: string, cadre: any, department?: string, avatar?: string, userId?: string) => void;
   updateUserProfile: (updates: Partial<UserProfile>) => void;
   logout: () => void;
   startTournamentStage: (tournamentId: string, stageNumber: 1 | 2 | 3) => void;
@@ -99,11 +99,11 @@ export const useStore = create<AppState>((set, get) => ({
   selectedOpponent: null,
   setSelectedOpponent: (opponent) => set({ selectedOpponent: opponent }),
 
-  loginWithDomain: (email, name, mdaName, cadre, department = 'Administration', avatar) => {
+  loginWithDomain: (email, name, mdaName, cadre, department = 'Administration', avatar, userId) => {
     const isGov = email.endsWith('.gov.ng') || email.endsWith('.gov') || email.includes('@gov');
     const defaultAvatar = avatar || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200';
     const newUser: UserProfile = {
-      id: `usr-${Date.now()}`,
+      id: userId || `usr-${Date.now()}`,
       name: name || 'Civil Servant',
       email,
       isVerifiedGov: isGov,
