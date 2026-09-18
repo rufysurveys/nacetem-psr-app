@@ -37,73 +37,41 @@ export const DEFAULT_GAMES: GameRecord[] = [
 export const ScheduleTournamentPage: React.FC = () => {
   const { user, setActivePage, setSelectedOpponent } = useStore();
 
-  const getSavedLocalGames = (): GameRecord[] => {
-    try {
-      const raw = localStorage.getItem(LOCAL_GAMES_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {}
-    return DEFAULT_GAMES;
-  };
-
-  const saveLocalGames = (items: GameRecord[]) => {
-    try {
-      localStorage.setItem(LOCAL_GAMES_KEY, JSON.stringify(items));
-    } catch (e) {}
-  };
-
-  const [games, setGames] = useState<GameRecord[]>(getSavedLocalGames());
-  const [isLoading, setIsLoading] = useState(false);
+  const [games, setGames] = useState<GameRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Fetch games from Supabase cloud database & merge with local cache
+  // Fetch scheduled tournaments directly from Supabase Central Database
   const loadGames = async () => {
     setIsLoading(true);
-    const remoteGames = await cloudDatabaseService.fetchAvailableGames();
-    const localSaved = getSavedLocalGames();
-
-    const mergedMap = new Map<string, GameRecord>();
-    // Add remote cloud games first
-    remoteGames.forEach(g => mergedMap.set(g.id, g));
-    // Add local fallback games only if not present in remote
-    localSaved.forEach(g => {
-      if (!mergedMap.has(g.id)) {
-        mergedMap.set(g.id, g);
-      }
-    });
-
-    const mergedList = Array.from(mergedMap.values());
-    const finalGames = mergedList.length > 0 ? mergedList : DEFAULT_GAMES;
-
-    setGames(finalGames);
-    saveLocalGames(finalGames);
-    setIsLoading(false);
+    setErrorMessage(null);
+    try {
+      const remoteGames = await cloudDatabaseService.fetchAvailableGames();
+      setGames(remoteGames);
+    } catch (err: any) {
+      console.error('Failed to load tournaments from central database:', err);
+      setErrorMessage(err.message || 'Could not load scheduled tournaments from central database.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
     loadGames();
 
-    // Auto-poll remote games every 4s for instant cross-device updates
+    // Background polling every 4s for instant cross-device updates
     const pollInterval = setInterval(() => {
       cloudDatabaseService.fetchAvailableGames().then(remoteGames => {
-        if (remoteGames.length > 0) {
-          setGames(prev => {
-            const map = new Map<string, GameRecord>();
-            remoteGames.forEach(g => map.set(g.id, g));
-            prev.forEach(g => {
-              if (!map.has(g.id)) map.set(g.id, g);
-            });
-            return Array.from(map.values());
-          });
-        }
+        setGames(remoteGames);
+      }).catch(err => {
+        console.warn('Background games poll notice:', err);
       });
     }, 4000);
 
     // Supabase Realtime Channel: Listen for games INSERT/UPDATE across devices
     const gamesChannel = supabase
-      .channel('public:games')
+      .channel('public:games:schedule')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'games' },
@@ -126,15 +94,21 @@ export const ScheduleTournamentPage: React.FC = () => {
   const [cutoffDateTime, setCutoffDateTime] = useState('2026-09-21T23:59');
   const [description, setDescription] = useState('Official competition testing Public Service Rules mastery across federal agencies.');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
 
   const handleCreateSchedule = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setScheduleError(null);
 
-    let newGame: GameRecord | null = null;
     try {
-      newGame = await cloudDatabaseService.createGame({
-        host_id: user?.id || 'usr-default',
+      const hostUserId = user?.id;
+      if (!hostUserId) {
+        throw new Error('You must be signed in to schedule a tournament.');
+      }
+
+      const createdGame = await cloudDatabaseService.createGame({
+        host_id: hostUserId,
         title,
         competition_mode: competitionMode,
         target_org: competitionMode === 'inter_agency' ? 'National Inter-Agency' : targetOrg,
@@ -145,40 +119,18 @@ export const ScheduleTournamentPage: React.FC = () => {
         description
       });
 
-      if (newGame) {
-        await cloudDatabaseService.joinGame(newGame.id, user?.id || 'usr-default');
-      }
-    } catch (e) {
-      console.warn('Schedule game notice:', e);
+      // Join host as player
+      await cloudDatabaseService.joinGame(createdGame.id, hostUserId);
+
+      // Re-query database to show new game
+      await loadGames();
+      setIsModalOpen(false);
+    } catch (err: any) {
+      console.error('Schedule creation failed:', err);
+      setScheduleError(err.message || 'Failed to publish tournament to central database.');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    if (!newGame) {
-      newGame = {
-        id: `game-${Date.now()}`,
-        host_id: user?.id || 'usr-default',
-        title,
-        competition_mode: competitionMode,
-        target_org: competitionMode === 'inter_agency' ? 'National Inter-Agency' : targetOrg,
-        start_datetime: new Date(startDateTime).toISOString(),
-        cutoff_datetime: new Date(cutoffDateTime).toISOString(),
-        max_players: 50,
-        status: 'scheduled',
-        description,
-        created_at: new Date().toISOString()
-      };
-    }
-
-    // PREPEND IMMEDIATELY TO STATE & LOCAL STORAGE
-    const createdGame = newGame;
-    setGames(prev => {
-      const filtered = prev.filter(g => g.id !== createdGame.id);
-      const updated = [createdGame, ...filtered];
-      saveLocalGames(updated);
-      return updated;
-    });
-
-    setIsModalOpen(false);
-    setIsSubmitting(false);
   };
 
   const handleJoinGame = async (game: GameRecord) => {

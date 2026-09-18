@@ -72,8 +72,13 @@ export const ScheduleTournamentModal: React.FC<Props> = ({ isOpen, onClose }) =>
 
     // Persist game directly to Supabase Cloud DB for cross-device sync
     try {
+      if (!user?.id) {
+        alert('You must be signed in to schedule a competition.');
+        return;
+      }
+
       await cloudDatabaseService.createGame({
-        host_id: user?.id || 'usr-default',
+        host_id: user.id,
         title: tournTitle,
         competition_mode: competitionMode === 'inter_agency' ? 'inter_agency' : 'intra_dept',
         target_org: targetOrg,
@@ -81,10 +86,12 @@ export const ScheduleTournamentModal: React.FC<Props> = ({ isOpen, onClose }) =>
         cutoff_datetime: `${startDate}T23:59:59Z`,
         max_players: 50,
         status: 'scheduled',
-        description: `Official competition hosted by ${user?.name || 'Civil Servant Officer'}`
+        description: `Official competition hosted by ${user.name}`
       });
-    } catch (err) {
-      console.warn('Modal create game notice:', err);
+    } catch (err: any) {
+      console.error('Modal create game error:', err);
+      alert(`Could not create tournament in central database: ${err.message}`);
+      return;
     }
 
     onClose();

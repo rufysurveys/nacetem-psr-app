@@ -228,68 +228,55 @@ export const cloudDatabaseService = {
 
   // --- GAMES ---
   async fetchAvailableGames(): Promise<GameRecord[]> {
-    try {
-      const { data, error } = await supabase
-        .from('games')
-        .select('*')
-        .neq('status', 'cancelled')
-        .order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('games')
+      .select('*')
+      .in('status', ['scheduled', 'open', 'active'])
+      .order('created_at', { ascending: false });
 
-      if (!error && data) {
-        return data as GameRecord[];
-      }
-    } catch (e) {}
+    if (error) {
+      console.error('Supabase fetchAvailableGames error:', error.message);
+      throw new Error(`Central Database fetch failed: ${error.message}`);
+    }
 
-    return [];
+    return (data || []) as GameRecord[];
   },
 
   async createGame(game: Omit<GameRecord, 'id' | 'created_at'>): Promise<GameRecord> {
     const hostId = ensureValidUUID(game.host_id);
-
-    // Auto-ensure host profile exists in public.profiles first to satisfy FK constraint
-    try {
-      await supabase
-        .from('profiles')
-        .upsert({
-          user_id: hostId,
-          full_name: 'Civil Servant Officer',
-          email: 'officer@nacetem.gov.ng',
-          ministry: 'Federal Civil Service',
-          agency: 'National Centre for Technology Management (NACETEM)',
-          department: 'Administration',
-          cadre: 'Senior Executive Officer (GL 10)'
-        }, { onConflict: 'user_id' });
-    } catch (e) {
-      console.warn('Host profile auto-upsert notice:', e);
-    }
 
     const gameToInsert = {
       ...game,
       host_id: hostId
     };
 
-    try {
-      const { data, error } = await supabase
-        .from('games')
-        .insert(gameToInsert)
-        .select()
-        .single();
+    // 1. Insert Game into central Supabase database
+    const { data, error } = await supabase
+      .from('games')
+      .insert(gameToInsert)
+      .select()
+      .single();
 
-      if (!error && data) {
-        return data as GameRecord;
-      }
-      console.warn('Supabase createGame notice:', error?.message);
-    } catch (e) {
-      console.warn('createGame exception:', e);
+    if (error || !data) {
+      console.error('Supabase createGame failed:', error?.message);
+      throw new Error(`Failed to create tournament in central database: ${error?.message || 'Unknown database error'}`);
     }
 
-    // Fallback: return created game object so UI never hangs
-    const fallbackGame: GameRecord = {
-      id: `game-${Date.now()}`,
-      ...gameToInsert,
-      created_at: new Date().toISOString()
-    };
-    return fallbackGame;
+    const createdGame = data as GameRecord;
+
+    // 2. Automatically insert Host into game_players relationship table
+    try {
+      await supabase.from('game_players').insert({
+        game_id: createdGame.id,
+        user_id: hostId,
+        status: 'joined',
+        current_score: 0
+      });
+    } catch (e) {
+      console.warn('Host auto-join relationship warning:', e);
+    }
+
+    return createdGame;
   },
 
   async updateGameStatus(gameId: string, status: GameRecord['status']): Promise<boolean> {
@@ -307,30 +294,40 @@ export const cloudDatabaseService = {
 
   // --- GAME PLAYERS ---
   async joinGame(gameId: string, userId: string): Promise<GamePlayerRecord> {
+    const validUserId = ensureValidUUID(userId);
+
+    // 1. Check if user is already a joined player in this tournament instance
+    const { data: existing } = await supabase
+      .from('game_players')
+      .select('*')
+      .eq('game_id', gameId)
+      .eq('user_id', validUserId)
+      .maybeSingle();
+
+    if (existing) {
+      return existing as GamePlayerRecord;
+    }
+
+    // 2. Insert player membership record into central database
     const playerToInsert = {
       game_id: gameId,
-      user_id: ensureValidUUID(userId),
+      user_id: validUserId,
       status: 'joined' as const,
       current_score: 0
     };
 
-    try {
-      const { data, error } = await supabase
-        .from('game_players')
-        .insert(playerToInsert)
-        .select()
-        .single();
+    const { data, error } = await supabase
+      .from('game_players')
+      .insert(playerToInsert)
+      .select()
+      .single();
 
-      if (!error && data) {
-        return data as GamePlayerRecord;
-      }
-    } catch (e) {}
+    if (error || !data) {
+      console.error('Supabase joinGame failed:', error?.message);
+      throw new Error(`Failed to join tournament in central database: ${error?.message || 'Database insert error'}`);
+    }
 
-    return {
-      id: `gp-${Date.now()}`,
-      ...playerToInsert,
-      joined_at: new Date().toISOString()
-    };
+    return data as GamePlayerRecord;
   },
 
   async fetchGamePlayers(gameId: string): Promise<(GamePlayerRecord & { profile?: ProfileRecord })[]> {

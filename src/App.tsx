@@ -15,30 +15,56 @@ import { ScheduleTournamentPage } from './pages/ScheduleTournamentPage';
 import { RemoteMatchRoom } from './components/quiz/RemoteMatchRoom';
 import { Shield } from 'lucide-react';
 
-import { cloudDatabaseService } from './services/supabase';
+import { supabase, cloudDatabaseService } from './services/supabase';
 
 export const App: React.FC = () => {
-  const { user, activePage, setScheduledTournaments } = useStore();
+  const { user, activePage, setScheduledTournaments, loginWithDomain } = useStore();
 
-  // Continuous global background cloud sync across all devices (Abuja <-> Lagos) via Supabase
+  // 1. Automatic Supabase Auth Session Recovery on Mount
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session?.user) {
+        const u = data.session.user;
+        cloudDatabaseService.fetchProfileByUserId(u.id).then(profile => {
+          if (profile) {
+            loginWithDomain(
+              profile.email,
+              profile.full_name,
+              profile.agency || profile.ministry,
+              profile.cadre,
+              profile.department,
+              profile.avatar_url,
+              u.id
+            );
+          }
+        });
+      }
+    });
+  }, [loginWithDomain]);
+
+  // 2. Continuous global background cloud sync across all devices via Supabase
   useEffect(() => {
     const syncTournaments = async () => {
-      const dbGames = await cloudDatabaseService.fetchAvailableGames();
-      if (dbGames && dbGames.length > 0) {
-        const mappedItems: ScheduledTournamentItem[] = dbGames.map(g => ({
-          id: g.id,
-          title: g.title,
-          competitionMode: g.competition_mode,
-          targetOrg: g.target_org,
-          startDateTime: g.start_datetime,
-          cutoffDateTime: g.cutoff_datetime,
-          winnerBadgeTitle: '🏆 Championship Winner Badge',
-          registeredCount: g.max_players,
-          isSubscribed: true,
-          createdBy: g.host_id,
-          description: g.description || 'Public Service Rules tournament.'
-        }));
-        setScheduledTournaments(mappedItems);
+      try {
+        const dbGames = await cloudDatabaseService.fetchAvailableGames();
+        if (dbGames) {
+          const mappedItems: ScheduledTournamentItem[] = dbGames.map(g => ({
+            id: g.id,
+            title: g.title,
+            competitionMode: g.competition_mode,
+            targetOrg: g.target_org,
+            startDateTime: g.start_datetime,
+            cutoffDateTime: g.cutoff_datetime,
+            winnerBadgeTitle: '🏆 Championship Winner Badge',
+            registeredCount: g.max_players,
+            isSubscribed: true,
+            createdBy: g.host_id,
+            description: g.description || 'Public Service Rules tournament.'
+          }));
+          setScheduledTournaments(mappedItems);
+        }
+      } catch (err) {
+        console.warn('App background sync notice:', err);
       }
     };
 
