@@ -7,9 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:remote": "node test-remote-contests.mjs",
+    "test:links": "node test-room-links.mjs"
   },
   "dependencies": {
+    "@mediapipe/tasks-vision": "0.10.32",
     "@supabase/supabase-js": "^2.116.0",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
@@ -22,6 +25,8 @@
     "zustand": "^5.0.3"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "@playwright/test": "1.58.2",
     "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^22.13.4",
     "@types/react": "^18.3.18",

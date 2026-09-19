@@ -1,0 +1,325 @@
+{
+  "sourceRows": 958,
+  "eligibleQuizRows": 946,
+  "scenarios": 20,
+  "excludedForConflictingAnswerKeys": [
+    {
+      "file": "Chapter12_Section2.xlsx",
+      "sheet": "Sheet1",
+      "row": 54,
+      "rule": "PSR 120224",
+      "section": "Chapter 12 Section 2",
+      "feedback": "Under PSR Rule 120224(b), the MDA must certify that the staff member can be released to undertake Sabbatical Leave without replacement or impairing the smooth flow of work.",
+      "valid": false,
+      "question": "The Officer’s MDA must certify what before Sabbatical Leave is granted?",
+      "options": [
+        "That the Officer can be released without replacement or impairing the smooth flow of work",
+        "That the Officer must be dismissed first",
+        "That the Officer is no longer needed in Service",
+        "That the Officer will not return"
+      ],
+      "letter": "B",
+      "answer": "That the Officer can be released without replacement or impairing the smooth flow of work"
+    },
+    {
+      "file": "Chapter12_Section2.xlsx",
+      "sheet": "Sheet1",
+      "row": 87,
+      "rule": "PSR 120237",
+      "section": "Chapter 12 Section 2",
+      "feedback": "Under PSR Rule 120237, an Officer who accepts such political appointment is deemed to have resigned from Service from the date of acceptance of the offer.",
+      "valid": false,
+      "question": "What is the effect if an Officer accepts a political appointment listed under Rule 120237?",
+      "options": [
+        "He is deemed to have resigned from Service from the date of acceptance",
+        "He remains automatically on paid leave",
+        "He receives automatic promotion",
+        "He continues without approval"
+      ],
+      "letter": "B",
+      "answer": "He is deemed to have resigned from Service from the date of acceptance"
+    },
+    {
+      "file": "Chapter2_Section7.xlsx",
+      "sheet": "Sheet1",
+      "row": 21,
+      "rule": "PSR 020705",
+      "section": "Chapter 2 Section 7",
+      "feedback": "Under PSR Rule 020705, the date on which an acting appointment commences is indicated in the gazette notice authorizing the appointment.",
+      "valid": false,
+      "question": "Where is the commencement date of an acting appointment indicated?",
+      "options": [
+        "In the gazette notice authorizing the appointment",
+        "In the Officer’s private diary",
+        "In the annual leave roster",
+        "In a Staff Union register"
+      ],
+      "letter": "B",
+      "answer": "In the gazette notice authorizing the appointment"
+    },
+    {
+      "file": "Chapter2_Section7.xlsx",
+      "sheet": "Sheet1",
+      "row": 25,
+      "rule": "PSR 020705",
+      "section": "Chapter 2 Section 7",
+      "feedback": "Under PSR Rule 020705(c), the commencement date may relate to when the substantive holder commences vacation leave in the same station, where applicable.",
+      "valid": false,
+      "question": "Under Rule 020705, commencement may also relate to the date the substantive holder does what in the same station?",
+      "options": [
+        "Commences vacation leave",
+        "Joins a secret society",
+        "Applies for retirement benefits",
+        "Receives a query"
+      ],
+      "letter": "B",
+      "answer": "Commences vacation leave"
+    },
+    {
+      "file": "Chapter2_Section7.xlsx",
+      "sheet": "Sheet1",
+      "row": 29,
+      "rule": "PSR 020706",
+      "section": "Chapter 2 Section 7",
+      "feedback": "Under PSR Rule 020706(a), where the acting Officer hands over to the substantive holder, the cessation date will not normally be later than the date the substantive holder, before taking over, arrives at the station.",
+      "valid": false,
+      "question": "Where the acting Officer hands over to the substantive holder, the cessation date will not normally be later than when?",
+      "options": [
+        "The date the substantive holder, before taking over, arrives at the station",
+        "The date of the next promotion exercise",
+        "The date of the acting Officer’s birthday",
+        "The date of casual leave approval"
+      ],
+      "letter": "B",
+      "answer": "The date the substantive holder, before taking over, arrives at the station"
+    },
+    {
+      "file": "Chapter2_Section7.xlsx",
+      "sheet": "Sheet1",
+      "row": 34,
+      "rule": "PSR 020707",
+      "section": "Chapter 2 Section 7",
+      "feedback": "Under PSR Rule 020707, notification of reversion from acting appointment is done by completing Form No. Gen. 15A.",
+      "valid": false,
+      "question": "Which form is used to notify the Federal Civil Service Commission when Officers revert from acting appointment?",
+      "options": [
+        "Form Gen. 15A",
+        "Form L.10",
+        "Form Gen. 60",
+        "Form FC. 2"
+      ],
+      "letter": "C",
+      "answer": "Form Gen. 15A"
+    },
+    {
+      "file": "Chapter2_Section7.xlsx",
+      "sheet": "Sheet1",
+      "row": 40,
+      "rule": "PSR 020708",
+      "section": "Chapter 2 Section 7",
+      "feedback": "Under PSR Rule 020708(b), where the Head of a Department, Division, Unit or Branch is unavailable for a period spanning one month, the most senior Officer in the Department or Organization shall oversee the office.",
+      "valid": false,
+      "question": "Where the Head of a Department, Division, Unit or Branch is unavailable for a period spanning one month, who oversees the office?",
+      "options": [
+        "The most junior Officer",
+        "The Staff Union Chairman",
+        "The most senior Officer in the Department or Organization",
+        "The Officer’s personal assistant"
+      ],
+      "letter": "B",
+      "answer": "The most senior Officer in the Department or Organization"
+    },
+    {
+      "file": "Chapter2_Section7.xlsx",
+      "sheet": "Sheet1",
+      "row": 41,
+      "rule": "PSR 020708",
+      "section": "Chapter 2 Section 7",
+      "feedback": "Under PSR Rule 020708(b), the provision applies where the Head is unavailable for a period spanning one month as a result of annual leave or any other approved assignment.",
+      "valid": false,
+      "question": "Rule 020708(b) applies where the Head of Department, Division, Unit or Branch is unavailable due to what?",
+      "options": [
+        "Annual leave or any other approved assignment",
+        "Dismissal only",
+        "Secret society membership only",
+        "Private business only"
+      ],
+      "letter": "C",
+      "answer": "Annual leave or any other approved assignment"
+    },
+    {
+      "file": "Chapter2_Section8.xlsx",
+      "sheet": "Sheet1",
+      "row": 41,
+      "rule": "PSR 020807",
+      "section": "Chapter 2 Section 8",
+      "feedback": "PSR Rule 020807 covers Officers on approved leave of absence, secondment, approved study leave or special assignment.",
+      "valid": false,
+      "question": "Which category of Officers is covered by Rule 020807?",
+      "options": [
+        "Officers on approved leave of absence, secondment, approved study leave or special assignment",
+        "Only Officers under disciplinary action",
+        "Only dismissed Officers",
+        "Only contract Officers"
+      ],
+      "letter": "B",
+      "answer": "Officers on approved leave of absence, secondment, approved study leave or special assignment"
+    },
+    {
+      "file": "Chapter2_Section8.xlsx",
+      "sheet": "Sheet1",
+      "row": 51,
+      "rule": "PSR 020810",
+      "section": "Chapter 2 Section 8",
+      "feedback": "Under PSR Rule 020810, the validity requirement applies to promotion in Federal Government Parastatals or Agencies.",
+      "valid": false,
+      "question": "Promotion under Rule 020810 concerns which type of organization?",
+      "options": [
+        "Federal Government Parastatals or Agencies",
+        "Private family businesses",
+        "Foreign embassies only",
+        "Staff Union branches"
+      ],
+      "letter": "C",
+      "answer": "Federal Government Parastatals or Agencies"
+    },
+    {
+      "file": "Chapter3_Section5.xlsx",
+      "sheet": "Sheet1",
+      "row": 16,
+      "rule": "PSR 030501",
+      "section": "Chapter 3 Section 5",
+      "feedback": "PSR Rule 030501(d) states that for further advancement beyond GL. 10, Officers shall attend the approved institutions and pass the prescribed examination.",
+      "valid": false,
+      "question": "What is the grade-level threshold mentioned in Rule 030501(d) for further advancement?",
+      "options": [
+        "Beyond GL. 10",
+        "Below GL. 01",
+        "Only GL. 03",
+        "Only GL. 06"
+      ],
+      "letter": "B",
+      "answer": "Beyond GL. 10"
+    },
+    {
+      "file": "Chapter3_Section6.xlsx",
+      "sheet": "Sheet1",
+      "row": 5,
+      "rule": "PSR 030601",
+      "section": "Chapter 3 Section 6",
+      "feedback": "Under PSR Rule 030601, the phrase “from time to time” means the Office of the Head of the Civil Service of the Federation may determine or review the applicable rates when necessary.",
+      "valid": false,
+      "question": "What does the phrase “from time to time” in Rule 030601 imply?",
+      "options": [
+        "The rates may be determined or reviewed when necessary by the OHCSF",
+        "The rates must never change",
+        "The rates are fixed by each candidate",
+        "The rates are decided only by invigilators"
+      ],
+      "letter": "D",
+      "answer": "The rates may be determined or reviewed when necessary by the OHCSF"
+    }
+  ],
+  "scenarioSources": [
+    {
+      "file": "Chapter12_Section2.xlsx",
+      "row": 5,
+      "scenario": "Your annual leave dates are pencilled into your diary, but your superior has not authorized your absence. A colleague urges you to travel tonight."
+    },
+    {
+      "file": "Chapter12_Section2.xlsx",
+      "row": 12,
+      "scenario": "Your unit needs cover throughout the year. You propose splitting your annual leave into four separate blocks."
+    },
+    {
+      "file": "Chapter12_Section2.xlsx",
+      "row": 14,
+      "scenario": "You have approved annual leave and intend to spend it abroad. Your itinerary and overseas address are ready."
+    },
+    {
+      "file": "Chapter12_Section2.xlsx",
+      "row": 15,
+      "scenario": "While on vacation leave, you are formally required to perform official duty for several days. The leave ledger still counts those days as holiday."
+    },
+    {
+      "file": "Chapter12_Section2.xlsx",
+      "row": 19,
+      "scenario": "Your leave was curtailed for an official assignment. The assignment is now complete and a colleague suggests saving the balance for several years."
+    },
+    {
+      "file": "Chapter13_Section3.xlsx",
+      "row": 2,
+      "scenario": "You wake up too ill to attend work. Your supervisor is expecting you, but no notification has been sent."
+    },
+    {
+      "file": "Chapter13_Section3.xlsx",
+      "row": 6,
+      "scenario": "You obtain medical treatment while away from your usual duty location. You have not yet told your employer."
+    },
+    {
+      "file": "Chapter13_Section3.xlsx",
+      "row": 11,
+      "scenario": "An officer is so ill that they cannot visit the health provider. You are the next of kin assisting them."
+    },
+    {
+      "file": "Chapter13_Section3.xlsx",
+      "row": 19,
+      "scenario": "An officer remains unfit for duty after three months of certified illness. The file reaches your desk for the next step."
+    },
+    {
+      "file": "Chapter13_Section3.xlsx",
+      "row": 25,
+      "scenario": "A Medical Board has issued recommendations that differ from the earlier advice of the health provider. You must process the case."
+    },
+    {
+      "file": "Chapter2_Section2.xlsx",
+      "row": 13,
+      "scenario": "A professional recruit needs additional qualifying experience before appointment in the full grade. You are preparing the appointment paperwork."
+    },
+    {
+      "file": "Chapter2_Section2.xlsx",
+      "row": 16,
+      "scenario": "A trainee has satisfactorily completed the prescribed training. Your unit must prepare the next appointment action."
+    },
+    {
+      "file": "Chapter2_Section2.xlsx",
+      "row": 18,
+      "scenario": "An already confirmed officer is appointed to a training grade. HR asks how to treat the officer during training."
+    },
+    {
+      "file": "Chapter2_Section2.xlsx",
+      "row": 20,
+      "scenario": "A proposed training secondment would extend beyond the normal training period. You are asked to process it as routine."
+    },
+    {
+      "file": "Chapter2_Section2.xlsx",
+      "row": 23,
+      "scenario": "A confirmed officer in a lower post has been converted to a higher post. A draft letter places the officer on probation again solely because of that conversion."
+    },
+    {
+      "file": "Chapter3_Section5.xlsx",
+      "row": 3,
+      "scenario": "You are a newly appointed professional officer covered by the compulsory confirmation examination requirement. There is no Government exemption, and you are planning your development timetable."
+    },
+    {
+      "file": "Chapter3_Section5.xlsx",
+      "row": 6,
+      "scenario": "A direct appointee covered by the confirmation examination rule has served only three months and asks HR to register them immediately."
+    },
+    {
+      "file": "Chapter3_Section5.xlsx",
+      "row": 8,
+      "scenario": "An officer is promoted from an unconfirmed junior post into a covered professional grade. The officer believes promotion alone removes the confirmation examination requirement."
+    },
+    {
+      "file": "Chapter3_Section5.xlsx",
+      "row": 10,
+      "scenario": "An officer transfers from another Scheduled Service at age 35 and has not satisfied confirmation conditions. You review the examination requirement."
+    },
+    {
+      "file": "Chapter3_Section5.xlsx",
+      "row": 13,
+      "scenario": "An officer is preparing for further advancement beyond GL. 10. A colleague suggests an attendance slip from any unapproved social seminar will suffice."
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
+
+const code=ts.transpileModule(fs.readFileSync(new URL('./src/services/roomLinks.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText;
+const copied=[];
+let selected=false, removed=false;
+const context={exports:{},URL,window:{location:{origin:'https://psr-gamification-app.vercel.app',pathname:'/',search:'?old=other'},history:{replaceState:(_a,_b,url)=>copied.push(url)}},navigator:{clipboard:{writeText:async link=>copied.push(link)}},document:{createElement:()=>({value:'',style:{},select:()=>{selected=true;},remove:()=>{removed=true;}}),body:{appendChild:()=>{}},execCommand:()=>true}};
+vm.runInNewContext(code,context);
+const api=context.exports;
+const game='7558f96c-c978-44b4-874b-124ea47dadb6';
+const expected='https://psr-gamification-app.vercel.app/?match='+game;
+assert.equal(api.tournamentLink(game),expected);
+api.rememberTournamentLink(game);
+await api.copyTournamentLink(game);
+assert.deepEqual(copied,[expected,expected],'navigation and clipboard use the exact tournament ID');
+context.navigator.clipboard.writeText=async()=>{throw Error('Blocked clipboard');};
+await api.copyTournamentLink(game);
+assert.ok(selected&&removed,'fallback selects the room URL and cleans up');
+context.document.execCommand=()=>false;
+await assert.rejects(()=>api.copyTournamentLink(game),/room link shown below/);
+console.log('PASS: tournament-specific link, matching navigation and clipboard, fallback copying, and visible manual-copy error.');

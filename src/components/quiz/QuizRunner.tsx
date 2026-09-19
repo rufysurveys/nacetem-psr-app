@@ -5,7 +5,7 @@ import { WheelOfRules, WheelSegment } from '../gameshow/WheelOfRules';
 import { HostDialogue } from '../gameshow/HostDialogue';
 import { Lifelines } from '../gameshow/Lifelines';
 import { playCorrectSound, playBuzzerSound, playFanfareSound } from '../../utils/audio';
-import { Clock, AlertTriangle, CheckCircle2, Trophy, Shield, Maximize, AlertOctagon, Eye } from 'lucide-react';
+import { Clock, AlertTriangle, CheckCircle2, Trophy, Shield, Maximize, AlertOctagon, Eye, BookOpen } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export const QuizRunner: React.FC = () => {
@@ -402,6 +402,21 @@ export const QuizRunner: React.FC = () => {
               );
             })}
           </div>
+
+          {isAnswerSubmitted && currentQ.explanation && (
+            <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl space-y-2 animate-fadeIn text-xs">
+              <div className="flex items-center gap-2 text-emerald-900 font-black uppercase tracking-wider">
+                <BookOpen className="w-4 h-4 text-emerald-700" />
+                <span>THE PSR RULE BEHIND THE DECISION</span>
+              </div>
+              <p className="font-bold text-emerald-950">
+                Rule Citation: {currentQ.psrCitation?.ruleNumber || 'Official PSR Guideline'} ({currentQ.chapter})
+              </p>
+              <p className="text-slate-700 leading-relaxed">
+                {currentQ.explanation}
+              </p>
+            </div>
+          )}
 
           {isAnswerSubmitted && (
             <div className="pt-4 border-t border-slate-100 flex justify-end">

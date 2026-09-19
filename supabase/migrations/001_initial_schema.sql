@@ -304,7 +304,7 @@ BEGIN
     RAISE EXCEPTION 'Question not found';
   END IF;
 
-  v_is_correct := (v_selected_option = v_correct_option);
+  v_is_correct := (p_selected_option = v_correct_option);
 
   IF v_is_correct THEN
     -- Base score: 100 + Speed Bonus (up to 375 based on response time)

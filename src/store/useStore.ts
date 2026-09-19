@@ -1,9 +1,8 @@
 import { create } from 'zustand';
 import { UserProfile, Question, Tournament, LeaderboardEntry, AntiCheatLog, MDA, ChapterAnalytics, QuizAttempt, CompetitionMode } from '../types';
 import { INITIAL_USER, INITIAL_QUESTIONS, INITIAL_TOURNAMENTS, INITIAL_LEADERBOARD, INITIAL_ANTI_CHEAT_LOGS, INITIAL_MDAS, INITIAL_CHAPTER_ANALYTICS } from '../data/mockData';
-import { cloudSyncService } from '../services/cloudSync';
 
-import { cloudDatabaseService, GameRecord } from '../services/supabase';
+import { cloudDatabaseService, GameRecord, supabase } from '../services/supabase';
 
 export type ActivePage = 'schedule' | 'remotematch' | 'quiz' | 'knockout' | 'sjt' | 'practice' | 'leaderboard' | 'profile' | 'admin';
 export type ExtendedCompMode = 'intra_dept' | 'inter_agency';
@@ -73,14 +72,18 @@ interface AppState {
   updateQuestion: (question: Question) => void;
   deleteQuestion: (questionId: string) => void;
   addTournament: (tournament: Tournament) => void;
-  addScheduledTournament: (item: ScheduledTournamentItem) => void;
-  subscribeToTournament: (id: string) => void;
-  setScheduledTournaments: (items: ScheduledTournamentItem[]) => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
   activePage: 'schedule',
-  setActivePage: (page) => set({ activePage: page }),
+  setActivePage: (page) => {
+    if (page !== 'remotematch') {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('match');
+      window.history.replaceState({}, '', url);
+    }
+    set({ activePage: page });
+  },
   user: null,
   setUser: (user) => set({ user }),
   isAdminMode: false,
@@ -94,12 +97,16 @@ export const useStore = create<AppState>((set, get) => ({
   isLoadingGames: false,
   gamesError: null,
   fetchCloudGames: async () => {
+    if (get().isLoadingGames) return;
+    set({ isLoadingGames: true });
     try {
       const games = await cloudDatabaseService.fetchAvailableGames();
       set({ dbGames: games, gamesError: null });
     } catch (err: any) {
       console.error('Zustand fetchCloudGames error:', err);
       set({ gamesError: err.message || 'Failed to fetch tournaments from central database.' });
+    } finally {
+      set({ isLoadingGames: false });
     }
   },
 
@@ -160,8 +167,9 @@ export const useStore = create<AppState>((set, get) => ({
     set({ user: updatedUser });
   },
 
-  logout: () => {
-    set({ user: null, activePage: 'schedule' });
+  logout: async () => {
+    await supabase.auth.signOut({ scope: 'local' });
+    set({ user: null, activePage: 'schedule', dbGames: [], selectedOpponent: null });
   },
 
   startTournamentStage: (tournamentId, stageNumber) => {
@@ -309,32 +317,4 @@ export const useStore = create<AppState>((set, get) => ({
     activeTournament: tournament
   })),
 
-  addScheduledTournament: (item) => {
-    const updated = [item, ...get().scheduledTournaments];
-    set({ scheduledTournaments: updated });
-    cloudSyncService.saveLocalTournaments(updated);
-    cloudSyncService.publishScheduledTournament(item);
-  },
-
-  subscribeToTournament: (id) => {
-    let targetItem: ScheduledTournamentItem | null = null;
-    const updated = get().scheduledTournaments.map(t => {
-      if (t.id === id) {
-        targetItem = { ...t, isSubscribed: true, registeredCount: t.registeredCount + 1 };
-        return targetItem;
-      }
-      return t;
-    });
-    set({ scheduledTournaments: updated });
-    cloudSyncService.saveLocalTournaments(updated);
-    if (targetItem) {
-      cloudSyncService.updateSubscriptionInCloud(id, targetItem);
-    }
-  },
-
-  setScheduledTournaments: (items) => {
-    set({ scheduledTournaments: items });
-    cloudSyncService.saveLocalTournaments(items);
-  }
 }));
-

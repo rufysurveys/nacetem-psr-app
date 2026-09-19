@@ -1,13 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../store/useStore';
 import { supabase, cloudDatabaseService, GameRecord } from '../services/supabase';
+import { rememberTournamentLink } from '../services/roomLinks';
+import { DGWelcomeBanner } from '../components/DGWelcomeBanner';
 import { Calendar, Clock, Trophy, Users, CheckCircle2, Plus, Building2, Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
 
 export const ScheduleTournamentPage: React.FC = () => {
   const { user, setActivePage, setSelectedOpponent, dbGames, isLoadingGames, gamesError, fetchCloudGames } = useStore();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isProctored, setIsProctored] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [joinError, setJoinError] = useState('');
+  const [joiningId, setJoiningId] = useState<string | null>(null);
+  const [maxPlayers, setMaxPlayers] = useState(200);
+  const invitationAttempted = useRef(false);
+  const localDate = (date: Date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
   useEffect(() => {
     fetchCloudGames();
@@ -16,8 +24,8 @@ export const ScheduleTournamentPage: React.FC = () => {
   const [title, setTitle] = useState('2026 PSR Inter-Agency Championship');
   const [competitionMode, setCompMode] = useState<'intra_dept' | 'inter_agency'>('intra_dept');
   const [targetOrg, setTargetOrg] = useState('National Centre for Technology Management (NACETEM)');
-  const [startDateTime, setStartDateTime] = useState('2026-09-22T10:00');
-  const [cutoffDateTime, setCutoffDateTime] = useState('2026-09-21T23:59');
+  const [startDateTime, setStartDateTime] = useState(() => localDate(new Date(Date.now() + 3600000)));
+  const [cutoffDateTime, setCutoffDateTime] = useState(() => localDate(new Date(Date.now() + 3600000)));
   const [description, setDescription] = useState('Official competition testing Public Service Rules mastery across federal agencies.');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -34,22 +42,23 @@ export const ScheduleTournamentPage: React.FC = () => {
 
       const createdGame = await cloudDatabaseService.createGame({
         host_id: hostUserId,
+        is_proctored: isProctored,
         title,
         competition_mode: competitionMode,
         target_org: competitionMode === 'inter_agency' ? 'National Inter-Agency' : targetOrg,
         start_datetime: new Date(startDateTime).toISOString(),
         cutoff_datetime: new Date(cutoffDateTime).toISOString(),
-        max_players: 50,
+        max_players: maxPlayers,
         status: 'scheduled',
         description
       });
 
-      // Join host as player
-      await cloudDatabaseService.joinGame(createdGame.id, hostUserId);
-
       // Re-query database to show new game across store
       await fetchCloudGames();
       setIsModalOpen(false);
+      rememberTournamentLink(createdGame.id);
+      setSelectedOpponent({ gameId: createdGame.id, title: createdGame.title });
+      setActivePage('remotematch');
     } catch (err: any) {
       console.error('Schedule creation failed:', err);
       setScheduleError(err.message || 'Failed to publish tournament to central database.');
@@ -58,21 +67,30 @@ export const ScheduleTournamentPage: React.FC = () => {
     }
   };
 
-  const handleJoinGame = async (game: GameRecord) => {
-    if (user) {
+  const handleJoinGame = async (game: Pick<GameRecord, 'id'> & Partial<GameRecord>) => {
+    if (joiningId || !user) return;
+    setJoiningId(game.id); setJoinError('');
+    try {
       await cloudDatabaseService.joinGame(game.id, user.id);
-    }
-    setSelectedOpponent({
-      gameId: game.id,
-      title: game.title,
-      targetOrg: game.target_org,
-      competitionMode: game.competition_mode
-    });
-    setActivePage('remotematch');
+      rememberTournamentLink(game.id);
+      setSelectedOpponent({ gameId: game.id, title: game.title });
+      setActivePage('remotematch');
+    } catch (err) {
+      setJoinError(err instanceof Error ? err.message : 'Unable to join this match. Please retry.');
+    } finally { setJoiningId(null); }
   };
+
+  useEffect(() => {
+    const match = new URLSearchParams(window.location.search).get('match');
+    if (match && user && !invitationAttempted.current) {
+      invitationAttempted.current = true;
+      void handleJoinGame({ id: match });
+    }
+  }, [user?.id]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fadeIn">
+      <DGWelcomeBanner />
       
       {/* Header Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gradient-to-r from-emerald-800 via-emerald-900 to-teal-950 p-6 sm:p-8 rounded-3xl text-white shadow-xl">
@@ -84,7 +102,7 @@ export const ScheduleTournamentPage: React.FC = () => {
             </div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[11px] font-bold">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-              <span>Live Cloud Sync Active</span>
+              <span>{gamesError ? 'Cloud connection needs attention' : isLoadingGames ? 'Syncing tournaments...' : 'Shared tournament directory'}</span>
             </div>
             <button
               onClick={fetchCloudGames}
@@ -102,14 +120,16 @@ export const ScheduleTournamentPage: React.FC = () => {
         </div>
 
         <button
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => { setIsProctored(false); setIsModalOpen(true); }}
           className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold px-5 py-3 rounded-2xl text-xs flex items-center gap-2 shadow-lg transition-all self-start md:self-auto shrink-0"
         >
           <Plus className="w-4 h-4 stroke-[3]" />
           <span>Schedule New Tournament</span>
         </button>
+        <button onClick={() => { setIsProctored(true); setIsModalOpen(true); }} className="bg-white text-emerald-950 font-extrabold px-5 py-3 rounded-2xl text-xs shadow-lg">Schedule Proctored Tournament</button>
       </div>
 
+      {joinError && <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-rose-800">{joinError}</div>}
       {/* SCHEDULE MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -118,7 +138,7 @@ export const ScheduleTournamentPage: React.FC = () => {
               <div>
                 <h3 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
                   <Calendar className="w-5 h-5 text-emerald-600" />
-                  <span>Schedule Competition Event</span>
+                  <span>{isProctored ? 'Schedule Proctored Tournament' : 'Schedule New Tournament'}</span>
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">Set the date, time, and rules for officers to participate.</p>
               </div>
@@ -138,6 +158,10 @@ export const ScheduleTournamentPage: React.FC = () => {
             )}
 
             <form onSubmit={handleCreateSchedule} className="space-y-4 text-xs">
+              <p className="bg-emerald-50 rounded-xl p-3">{isProctored ? 'Same three-round contest, with camera, entire-screen sharing, fullscreen and reviewable monitoring flags. Participants must consent and complete setup on a compatible desktop browser.' : 'Three timed rounds, a shared section wheel, 50:50, Rulebook Peek, lives and virtual jackpot points. No camera or screen monitoring.'}</p>
+              <div><label className="block font-bold text-slate-700 mb-1">Participant capacity (2-1,000)</label>
+                <input type="number" required min={2} max={1000} value={maxPlayers} onChange={e => setMaxPlayers(Number(e.target.value))} className="w-full bg-slate-50 border rounded-xl px-3 py-2" />
+              </div>
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Tournament Title</label>
                 <input
@@ -242,7 +266,7 @@ export const ScheduleTournamentPage: React.FC = () => {
       )}
 
       {/* GAMES GRID */}
-      {isLoadingGames ? (
+      {isLoadingGames && dbGames.length === 0 ? (
         <div className="py-12 text-center text-slate-500 flex flex-col items-center gap-2">
           <RefreshCw className="w-6 h-6 animate-spin text-emerald-600" />
           <span>Syncing scheduled competitions...</span>
@@ -294,6 +318,7 @@ export const ScheduleTournamentPage: React.FC = () => {
                     )}
                   </div>
 
+                  <p className="text-xs font-bold text-emerald-700">{g.is_proctored ? 'Proctored tournament · Camera and screen required' : 'Standard tournament · No proctoring'}</p>
                   <p className="text-xs text-slate-600 leading-relaxed">{g.description || 'Public Service Rules Competition'}</p>
 
                   <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-1.5 text-xs">
@@ -318,6 +343,7 @@ export const ScheduleTournamentPage: React.FC = () => {
                   </span>
                   <button
                     onClick={() => handleJoinGame(g)}
+                    disabled={joiningId !== null}
                     className={`font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all ${
                       isHost
                         ? 'bg-amber-500 hover:bg-amber-600 text-slate-950'
@@ -326,11 +352,7 @@ export const ScheduleTournamentPage: React.FC = () => {
                   >
                     <CheckCircle2 className="w-4 h-4" />
                     <span>
-                      {isAdminNoHost
-                        ? '⚔️ Join Challenge / Enter Match Room →'
-                        : isHost
-                        ? '👑 Host Match Room →'
-                        : '⚔️ Accept Challenge & Join as Guest →'}
+                      {joiningId === g.id ? 'Joining...' : g.status === 'completed' ? 'View match results' : isHost ? 'Enter host lobby' : 'Join match / Enter lobby'}
                     </span>
                   </button>
                 </div>

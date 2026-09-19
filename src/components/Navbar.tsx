@@ -66,7 +66,7 @@ export const Navbar: React.FC = () => {
 
         {/* Essential Navigation Items */}
         <nav className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
-          {essentialNavItems.map((item) => {
+          {essentialNavItems.filter(item => item.id !== 'admin' || user?.role === 'admin').map((item) => {
             const isActive = activePage === item.id || 
               (item.id === 'schedule' && (activePage === 'quiz' || activePage === 'knockout' || activePage === 'sjt' || activePage === 'remotematch'));
 

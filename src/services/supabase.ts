@@ -1,8 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Production Supabase Cloud Credentials
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://ksothbeqmxguyxygfzeu.supabase.co';
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtzb3RoYmVxbXhndXl4eWdmemV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2NTQ0NTMsImV4cCI6MjEwNTIzMDQ1M30.l_1-5oXTboiOYvyVIcBrMMr_ASdApSnUAqsP-LUs2Kc';
+// Both deployment and local development must explicitly use the same backend.
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+  throw new Error('Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to the shared Supabase project before building.');
+}
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
@@ -31,6 +34,7 @@ export interface ProfileRecord {
 }
 
 export interface GameRecord {
+  is_proctored?: boolean;
   id: string;
   host_id: string | null;
   title: string;
@@ -231,7 +235,8 @@ export const cloudDatabaseService = {
     const { data, error } = await supabase
       .from('games')
       .select('*')
-      .in('status', ['scheduled', 'open', 'active'])
+      .is('deleted_at', null)
+      .in('status', ['scheduled', 'open', 'full', 'active', 'completed'])
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -243,59 +248,18 @@ export const cloudDatabaseService = {
   },
 
   async createGame(game: Omit<GameRecord, 'id' | 'created_at'>): Promise<GameRecord> {
-    const isHostPresent = Boolean(game.host_id);
-    const validHostId = isHostPresent ? ensureValidUUID(game.host_id!) : null;
-
-    if (validHostId) {
-      // 1. Ensure Host Profile exists in public.profiles before FK constraint check
-      const existingProfile = await this.fetchProfileByUserId(validHostId);
-      if (!existingProfile) {
-        await this.upsertProfile({
-          user_id: validHostId,
-          full_name: 'Civil Servant Officer',
-          email: `officer_${validHostId.slice(0, 8)}@gov.ng`,
-          ministry: 'Federal Civil Service',
-          agency: game.target_org || 'Federal Civil Service Headquarters',
-          department: 'Administration',
-          cadre: 'Senior Executive Officer (GL 10)'
-        });
-      }
+    const { data: authData } = await supabase.auth.getSession();
+    if (!authData.session || authData.session.user.id !== game.host_id) {
+      throw new Error('Sign in with your own account to schedule remote contests. Demo mode cannot compete.');
     }
-
-    const gameToInsert = {
-      ...game,
-      host_id: validHostId
-    };
-
-    // 2. Insert Game into central Supabase database
-    const { data, error } = await supabase
-      .from('games')
-      .insert(gameToInsert)
-      .select()
-      .single();
-
-    if (error || !data) {
-      console.error('Supabase createGame failed:', error?.message);
-      throw new Error(`Failed to create tournament in central database: ${error?.message || 'Unknown database error'}`);
-    }
-
-    const createdGame = data as GameRecord;
-
-    // 3. Automatically insert Host into game_players relationship table if regular host tournament
-    if (validHostId) {
-      try {
-        await supabase.from('game_players').insert({
-          game_id: createdGame.id,
-          user_id: validHostId,
-          status: 'joined',
-          current_score: 0
-        });
-      } catch (e) {
-        console.warn('Host auto-join relationship warning:', e);
-      }
-    }
-
-    return createdGame;
+    const { data, error } = await supabase.rpc('schedule_contest', {
+      p_title: game.title, p_mode: game.competition_mode, p_target_org: game.target_org,
+      p_start: game.start_datetime, p_cutoff: game.cutoff_datetime,
+      p_max_players: game.max_players, p_description: game.description || '', p_proctored: game.is_proctored || false
+    });
+    if (error) throw new Error(error.code === 'PGRST202'
+      ? 'The shared contest database needs migration 004_remote_contests.sql before scheduling.' : error.message);
+    return data as GameRecord;
   },
 
   async updateGameStatus(gameId: string, status: GameRecord['status']): Promise<boolean> {
@@ -313,39 +277,13 @@ export const cloudDatabaseService = {
 
   // --- GAME PLAYERS ---
   async joinGame(gameId: string, userId: string): Promise<GamePlayerRecord> {
-    const validUserId = ensureValidUUID(userId);
-
-    // 1. Check if user is already a joined player in this tournament instance
-    const { data: existing } = await supabase
-      .from('game_players')
-      .select('*')
-      .eq('game_id', gameId)
-      .eq('user_id', validUserId)
-      .maybeSingle();
-
-    if (existing) {
-      return existing as GamePlayerRecord;
+    const { data: authData } = await supabase.auth.getSession();
+    if (!authData.session || authData.session.user.id !== userId) {
+      throw new Error('Sign in with your own account to join remote contests. Demo mode cannot compete.');
     }
-
-    // 2. Insert player membership record into central database
-    const playerToInsert = {
-      game_id: gameId,
-      user_id: validUserId,
-      status: 'joined' as const,
-      current_score: 0
-    };
-
-    const { data, error } = await supabase
-      .from('game_players')
-      .insert(playerToInsert)
-      .select()
-      .single();
-
-    if (error || !data) {
-      console.error('Supabase joinGame failed:', error?.message);
-      throw new Error(`Failed to join tournament in central database: ${error?.message || 'Database insert error'}`);
-    }
-
+    const { data, error } = await supabase.rpc('join_remote_game', { p_game_id: gameId });
+    if (error) throw new Error(error.code === 'PGRST202'
+      ? 'The shared contest database needs migration 004_remote_contests.sql before joining.' : error.message);
     return data as GamePlayerRecord;
   },
 

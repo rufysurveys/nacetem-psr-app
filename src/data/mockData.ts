@@ -1,6 +1,24 @@
 import { MDA, Question, Tournament, LeaderboardEntry, AntiCheatLog, ChapterAnalytics, UserProfile } from '../types';
-import excelQuestions from './excelQuestions.json';
 import abubakarAvatar from '../assets/abubakar_rufai.jpg';
+import { PSR_QUESTION_BANK } from './psrQuestionBank';
+
+export const INITIAL_QUESTIONS: Question[] = PSR_QUESTION_BANK.map((item, idx) => ({
+  id: item.id,
+  chapter: item.section,
+  type: idx % 3 === 1 ? 'sjt' : 'single',
+  title: item.question,
+  options: item.options,
+  correctAnswer: item.correctAnswer,
+  explanation: item.feedback,
+  psrCitation: {
+    ruleNumber: item.rule,
+    sectionTitle: item.section,
+    excerpt: item.feedback
+  },
+  weightage: 10,
+  difficulty: idx % 3 === 0 ? 'Basic' : idx % 3 === 1 ? 'Intermediate' : 'Advanced',
+  timeLimitSeconds: idx % 3 === 1 ? 25 : 15
+}));
 
 export const INITIAL_USER: UserProfile = {
   id: 'usr-001',
@@ -54,7 +72,6 @@ export const INITIAL_MDAS: MDA[] = [
   { id: 'mda-06', name: 'Central Bank of Nigeria', shortName: 'CBN', code: 'CBN-06', category: 'Agency', totalParticipants: 1250, aggregateScore: 9350, accuracyRate: 90.4, internalDepartments: ['Banking Supervision', 'Monetary Policy', 'Human Resources'] }
 ];
 
-export const INITIAL_QUESTIONS: Question[] = (excelQuestions as Question[]);
 
 export const INITIAL_TOURNAMENTS: Tournament[] = [
   {

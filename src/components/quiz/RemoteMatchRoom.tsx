@@ -1,335 +1,52 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useStore } from '../../store/useStore';
-import { Question } from '../../types';
-import { supabase, cloudDatabaseService, GamePlayerRecord, ProfileRecord } from '../../services/supabase';
-import { Trophy, Users, CheckCircle2, Copy, Swords, Sparkles, Clock, RefreshCw, AlertCircle } from 'lucide-react';
+import { supabase } from '../../services/supabase';
+import { contestRpc, getRoomState, remainingSeconds, RoomState } from '../../services/remoteContest';
+import { copyTournamentLink, tournamentLink } from '../../services/roomLinks';
+import { LegacyRemoteMatchRoom } from './LegacyRemoteMatchRoom';
+import { ProctorPanel } from './ProctorPanel';
+const rounds=['Know the Rule','The PSR Dilemma','The Civil Service Challenge'];
+const button='rounded-xl bg-emerald-700 text-white px-5 py-3 font-bold disabled:opacity-40 disabled:cursor-not-allowed';
 
-export const RemoteMatchRoom: React.FC = () => {
-  const { questions, recordQuizResult, setActivePage, user, selectedOpponent } = useStore();
-
-  const gameId = selectedOpponent?.gameId || 'game-default';
-  const gameTitle = selectedOpponent?.title || 'National PSR Remote Championship';
-
-  const duelQuestions = questions.filter((q: Question) => q.difficulty === 'Intermediate' || q.difficulty === 'Basic').slice(0, 10);
-
-  const [currentIdx, setCurrentIdx] = useState(0);
-  const [userScore, setUserScore] = useState(0);
-  const [selectedOpt, setSelectedOpt] = useState<number | null>(null);
-  const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
-  const [isFinished, setIsFinished] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
-  const [isSubmittingAnswer, setIsSubmittingAnswer] = useState(false);
-
-  // SPEED & ACCURACY QUESTION COUNTDOWN TIMER (15 seconds per question)
-  const [timeLeft, setTimeLeft] = useState(15);
-  const [speedBonusAwarded, setSpeedBonusAwarded] = useState<number>(0);
-
-  // Joined Players List in Room from Supabase Database
-  const [roomPlayers, setRoomPlayers] = useState<(GamePlayerRecord & { profile?: ProfileRecord })[]>([]);
-  const [isLoadingRoom, setIsLoadingRoom] = useState(true);
-
-  // Load Real Room Players from Supabase PostgreSQL
-  const loadRoomPlayers = async () => {
-    if (!selectedOpponent?.gameId) return;
-    setIsLoadingRoom(true);
-    const players = await cloudDatabaseService.fetchGamePlayers(selectedOpponent.gameId);
-    setRoomPlayers(players);
-    setIsLoadingRoom(false);
-  };
-
-  useEffect(() => {
-    loadRoomPlayers();
-
-    // Supabase Realtime Channel: Listen for game_players INSERT/UPDATE events in this specific room
-    if (selectedOpponent?.gameId) {
-      const channel = supabase
-        .channel(`game_lobby:${selectedOpponent.gameId}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'game_players', filter: `game_id=eq.${selectedOpponent.gameId}` },
-          () => {
-            loadRoomPlayers();
-          }
-        )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-  }, [selectedOpponent?.gameId]);
-
-  // SPEED & ACCURACY TIMER COUNTDOWN EFFECT (15s per question)
-  useEffect(() => {
-    if (isFinished || isAnswerSubmitted) return;
-
-    setTimeLeft(15);
-    const interval = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          // Auto-submit as Timed Out
-          setIsAnswerSubmitted(true);
-          setSelectedOpt(-1);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [currentIdx, isFinished, isAnswerSubmitted]);
-
-  const currentQ = duelQuestions[currentIdx] || duelQuestions[0];
-
-  // SUBMIT ANSWER VIA SERVER-SIDE TRUSTED RPC PROCEDURE
-  const handleSelectOption = async (idx: number) => {
-    if (isAnswerSubmitted || isSubmittingAnswer) return;
-    setSelectedOpt(idx);
-    setIsAnswerSubmitted(true);
-    setIsSubmittingAnswer(true);
-
-    const responseTimeMs = (15 - timeLeft) * 1000;
-
-    if (selectedOpponent?.gameId && user) {
-      // Call Supabase trusted server-side RPC procedure
-      const result = await cloudDatabaseService.submitAnswer(
-        selectedOpponent.gameId,
-        currentQ.id || `q-${currentIdx}`,
-        idx,
-        responseTimeMs
-      );
-
-      if (result) {
-        if (result.is_correct) {
-          setSpeedBonusAwarded(result.points_earned - 100);
-          setUserScore(result.current_total_score);
-        } else {
-          setSpeedBonusAwarded(0);
-        }
-      } else {
-        // Fallback local score calculation
-        if (idx === currentQ.correctAnswer) {
-          const speedBonus = timeLeft * 25;
-          const totalEarned = 300 + speedBonus;
-          setSpeedBonusAwarded(speedBonus);
-          setUserScore(prev => prev + totalEarned);
-        }
-      }
-    } else {
-      if (idx === currentQ.correctAnswer) {
-        const speedBonus = timeLeft * 25;
-        const totalEarned = 300 + speedBonus;
-        setSpeedBonusAwarded(speedBonus);
-        setUserScore(prev => prev + totalEarned);
-      }
-    }
-
-    setIsSubmittingAnswer(false);
-  };
-
-  const handleNext = () => {
-    if (currentIdx + 1 < duelQuestions.length) {
-      setCurrentIdx(prev => prev + 1);
-      setSelectedOpt(null);
-      setIsAnswerSubmitted(false);
-      setSpeedBonusAwarded(0);
-    } else {
-      setIsFinished(true);
-      recordQuizResult(userScore + 1500, 95, 3800, true, [], 2);
-    }
-  };
-
-  const handleCopyMatchCode = () => {
-    navigator.clipboard?.writeText(window.location.href);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
-  };
-
-  if (isFinished) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-10 space-y-6 animate-fadeIn font-sans">
-        <div className="bright-card rounded-3xl p-8 text-center space-y-6 border-2 border-emerald-500 shadow-2xl">
-          <div className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-700 border-2 border-emerald-500 flex items-center justify-center mx-auto shadow-inner">
-            <Trophy className="w-10 h-10" />
-          </div>
-
-          <div>
-            <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black uppercase tracking-wider">
-              INTER-LOCATION REALTIME DUEL COMPLETED
-            </span>
-            <h2 className="text-3xl font-black text-slate-900 mt-2">
-              🏆 Match Completed! Final Scores Recorded
-            </h2>
-            <p className="text-xs text-slate-600 max-w-lg mx-auto mt-1">
-              Synchronized Match for <strong>{gameTitle}</strong> recorded in Supabase PostgreSQL database.
-            </p>
-          </div>
-
-          <div className="bg-slate-50 border border-slate-200 p-6 rounded-3xl space-y-4 max-w-md mx-auto text-left shadow-sm">
-            <h4 className="font-extrabold text-slate-900 text-sm border-b border-slate-200 pb-2">Your Performance Record</h4>
-            <div className="flex justify-between items-center text-xs font-bold text-slate-700">
-              <span>Total Earned Score:</span>
-              <span className="text-emerald-700 font-extrabold text-base">{userScore} XP</span>
-            </div>
-            <div className="flex justify-between items-center text-xs font-bold text-slate-700">
-              <span>Database Status:</span>
-              <span className="text-emerald-600 flex items-center gap-1">
-                <CheckCircle2 className="w-3.5 h-3.5" /> Persisted to Supabase
-              </span>
-            </div>
-          </div>
-
-          <div className="flex justify-center gap-3 pt-4">
-            <button
-              onClick={() => setActivePage('schedule')}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 py-3 rounded-2xl text-xs shadow-md transition-all"
-            >
-              Return to Scheduled Tournaments
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-5xl mx-auto px-4 py-8 space-y-6 animate-fadeIn font-sans">
-      
-      {/* ROOM TITLE BANNER */}
-      <div className="bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 p-6 rounded-3xl text-white border border-emerald-500/30 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="px-3 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-extrabold uppercase border border-emerald-500/30">
-              SUPABASE REALTIME LOBBY
-            </span>
-            <span className="text-[10px] text-slate-400 font-semibold">Game ID: {gameId.slice(0, 8)}...</span>
-          </div>
-          <h2 className="text-2xl font-black">{gameTitle}</h2>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleCopyMatchCode}
-            className="bg-white/10 hover:bg-white/20 text-white text-xs font-bold px-3.5 py-2 rounded-xl border border-white/20 flex items-center gap-1.5 transition-all"
-          >
-            <Copy className="w-3.5 h-3.5 text-emerald-400" />
-            <span>{copiedLink ? 'Link Copied!' : 'Copy Room Link'}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* CONNECTED PLAYERS LIST (REAL SUPABASE REALTIME DB STATE) */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-5 space-y-3 shadow-sm">
-        <div className="flex items-center justify-between">
-          <h4 className="text-xs font-extrabold text-slate-800 uppercase flex items-center gap-1.5">
-            <Users className="w-4 h-4 text-emerald-600" />
-            <span>Connected Room Participants ({roomPlayers.length})</span>
-          </h4>
-          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Realtime Sync Active
-          </span>
-        </div>
-
-        {isLoadingRoom ? (
-          <div className="py-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-            <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" /> Loading participants from Supabase...
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1">
-            {roomPlayers.map((p) => (
-              <div key={p.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white font-extrabold text-xs flex items-center justify-center shrink-0">
-                  {p.profile?.full_name?.charAt(0) || 'P'}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h5 className="text-xs font-bold text-slate-900 truncate">{p.profile?.full_name || 'Officer'}</h5>
-                  <p className="text-[10px] text-slate-500 truncate">{p.profile?.agency || 'Federal Civil Service'}</p>
-                </div>
-                <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
-                  {p.current_score} XP
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* QUIZ ARENA */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 space-y-6 shadow-xl relative overflow-hidden">
-        
-        {/* TIMER BAR & QUESTION TRACKER */}
-        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-          <div className="flex items-center gap-2">
-            <span className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 font-extrabold text-xs flex items-center justify-center">
-              #{currentIdx + 1}
-            </span>
-            <span className="text-xs font-bold text-slate-600">Question {currentIdx + 1} of {duelQuestions.length}</span>
-          </div>
-
-          {/* 15s TIMER BAR */}
-          <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl">
-            <Clock className="w-4 h-4 text-amber-600" />
-            <span className="font-mono text-sm font-black text-amber-800">{timeLeft}s</span>
-          </div>
-        </div>
-
-        {/* QUESTION TEXT */}
-        <div>
-          <span className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">{currentQ.chapter}</span>
-          <h3 className="text-lg sm:text-xl font-black text-slate-900 mt-1 leading-snug">{currentQ.title}</h3>
-        </div>
-
-        {/* OPTIONS GRID */}
-        <div className="grid grid-cols-1 gap-3">
-          {currentQ.options.map((opt, idx) => {
-            const isSelected = selectedOpt === idx;
-            const isCorrect = idx === currentQ.correctAnswer;
-            let btnClass = 'bg-slate-50 border-slate-200 hover:border-slate-400 text-slate-800';
-
-            if (isAnswerSubmitted) {
-              if (isSelected) {
-                btnClass = isCorrect ? 'bg-emerald-600 text-white border-emerald-600 font-extrabold' : 'bg-rose-600 text-white border-rose-600 font-extrabold';
-              } else if (isCorrect) {
-                btnClass = 'bg-emerald-100 text-emerald-900 border-emerald-400 font-bold';
-              }
-            }
-
-            return (
-              <button
-                key={idx}
-                disabled={isAnswerSubmitted}
-                onClick={() => handleSelectOption(idx)}
-                className={`w-full text-left p-4 rounded-2xl border-2 transition-all text-xs flex items-center justify-between ${btnClass}`}
-              >
-                <span>{opt}</span>
-                {isAnswerSubmitted && isCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* SUBMITTED FEEDBACK & NEXT BUTTON */}
-        {isAnswerSubmitted && (
-          <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
-            <div>
-              {speedBonusAwarded > 0 && (
-                <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
-                  <Sparkles className="w-4 h-4" /> Speed Bonus: +{speedBonusAwarded} XP!
-                </span>
-              )}
-            </div>
-            <button
-              onClick={handleNext}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 py-3 rounded-2xl text-xs shadow-md transition-all flex items-center gap-2"
-            >
-              <span>Next Question</span>
-            </button>
-          </div>
-        )}
-
-      </div>
-
-    </div>
-  );
+function SharedWheel({round}:{round:NonNullable<RoomState['round']>}) {
+  const [spinning,setSpinning]=useState(false);
+  useEffect(()=>{const id=requestAnimationFrame(()=>setSpinning(true));return()=>cancelAnimationFrame(id);},[]);
+  const sections=round.sections, index=sections.indexOf(round.section_key), angle=360/sections.length;
+  return <div className="text-center py-4 space-y-4"><h2 className="text-2xl font-black">Wheel of Rules</h2><p>The shared wheel selects the section for everyone.</p><div className="relative w-64 h-64 mx-auto"><span className="absolute -top-4 left-1/2 -translate-x-1/2 z-10 text-4xl text-amber-500">▼</span><div style={{background:`conic-gradient(${sections.map((_,i)=>`${['#047857','#0f766e','#b45309','#334155'][i%4]} ${i*angle}deg ${(i+1)*angle}deg`).join(',')})`,transform:`rotate(${spinning?1800-index*angle-angle/2:0}deg)`,transition:'transform 5s cubic-bezier(.12,.65,.12,1)'}} className="w-full h-full rounded-full border-8 border-amber-300 shadow-xl relative">{sections.map((s,i)=><span key={s} style={{transform:`rotate(${i*angle+angle/2}deg) translateY(-90px) rotate(90deg)`}} className="absolute left-1/2 top-1/2 -ml-5 -mt-2 text-white text-[10px] font-bold w-10">{i+1}</span>)}</div><span className="absolute inset-0 m-auto w-16 h-16 rounded-full bg-white grid place-items-center font-black text-emerald-800 shadow">PSR</span></div><details className="text-xs text-slate-500"><summary>Wheel sections</summary>{sections.map((s,i)=><p key={s}>{i+1}. {s}</p>)}</details></div>;
+}
+export const RemoteMatchRoom:React.FC=()=>{
+ const {selectedOpponent,user,setActivePage}=useStore();const gameId=selectedOpponent?.gameId as string|undefined;
+ const [room,setRoom]=useState<RoomState|null>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[now,setNow]=useState(0),[copied,setCopied]=useState(false);
+ const [proctorReady,setProctorReady]=useState(false);
+ const client=useRef(crypto.randomUUID()),alive=useRef(false),loading=useRef(false),acting=useRef(false),clock=useRef({server:0,local:0}),boundary=useRef(0);
+ const refresh=useCallback(async()=>{if(!gameId||loading.current)return;loading.current=true;const sent=performance.now();try{const state=await getRoomState(gameId,client.current);if(!alive.current)return;const received=performance.now();clock.current={server:Date.parse(state.server_now)+(received-sent)/2,local:received};setRoom(state);setNow(clock.current.server);boundary.current=state.boundary?Date.parse(state.boundary):0;}catch(e){if(alive.current)setError(e instanceof Error?e.message:'Connection lost. Reconnecting…');}finally{loading.current=false;}},[gameId]);
+ useEffect(()=>{if(!gameId)return;alive.current=true;void refresh();let timeout:ReturnType<typeof setTimeout>;const queue=()=>{clearTimeout(timeout);timeout=setTimeout(()=>void refresh(),250);};const channel=supabase.channel(`contest-v2:${gameId}`).on('postgres_changes',{event:'*',schema:'public',table:'games',filter:`id=eq.${gameId}`},queue).on('postgres_changes',{event:'*',schema:'public',table:'game_players',filter:`game_id=eq.${gameId}`},queue).subscribe();const poll=setInterval(()=>void refresh(),3000),tick=setInterval(()=>{const t=clock.current.server+performance.now()-clock.current.local;setNow(t);if(boundary.current&&t>=boundary.current){boundary.current=0;void refresh();}},100);window.addEventListener('online',queue);return()=>{alive.current=false;clearTimeout(timeout);clearInterval(poll);clearInterval(tick);window.removeEventListener('online',queue);void supabase.removeChannel(channel);void contestRpc('leave_remote_room',{p_game_id:gameId,p_client_id:client.current}).catch(()=>{});};},[gameId,refresh]);
+ const act=async(name:string,args:Record<string,unknown>={})=>{if(acting.current)return;acting.current=true;setBusy(true);setError('');try{await contestRpc(name,{p_game_id:gameId,...args});await refresh();}catch(e){setError(e instanceof Error?e.message:'Please retry.');}finally{acting.current=false;setBusy(false);}};
+ const leave=()=>{const url=new URL(location.href);url.searchParams.delete('match');history.replaceState({},'',url);setActivePage('schedule');};
+ if(!gameId)return <div className="p-8"><button onClick={leave}>Choose a tournament</button></div>;
+ if(room&&!room.phase)return <LegacyRemoteMatchRoom/>;
+ const host=room?.game.host_id===user?.id,connected=room?.players.filter(p=>p.connected)||[],me=room?.players.find(p=>p.user_id===user?.id),q=room?.question,phase=room?.phase;
+ const seconds=room?.boundary?remainingSeconds(room.boundary,now):0;
+ const eligible=!room?.game.is_proctored||proctorReady;
+ const canAnswer=phase==='answer'&&seconds>0&&!room?.answer&&!busy&&eligible&&(q?.round_number!==3||(me?.life_tokens??0)>0);
+ return <div className="max-w-7xl mx-auto px-4 py-8 space-y-5"><header className="bg-emerald-950 text-white rounded-3xl p-6 space-y-3"><div className="flex justify-between gap-4"><span className="text-emerald-200 font-bold text-sm">{room?.game.is_proctored?'PROCTORED':'OPEN'} DEPARTMENT CONTEST {host?'· YOU ARE THE HOST':''}</span><button onClick={leave} className="underline">Leave room</button></div><h1 className="text-2xl font-black">{room?.game.title||'Connecting to tournament…'}</h1><button onClick={async()=>{try{await copyTournamentLink(gameId);setCopied(true);}catch(e){setError(String(e));}}} className="font-bold">{copied?'Link copied ✓':'Copy room link'}</button><input aria-label="Tournament invitation link" readOnly value={tournamentLink(gameId)} onFocus={e=>e.target.select()} className="block w-full bg-white/10 rounded-lg p-2 text-xs"/></header>
+ {error&&<div role="alert" className="bg-rose-50 text-rose-800 border border-rose-200 p-4 rounded-xl">{error}<button className="ml-3 underline" onClick={()=>{setError('');void refresh();}}>Retry</button></div>}
+ {room?.game.is_proctored&&<ProctorPanel gameId={gameId} host={host} active={phase!=='completed'&&phase!=='cancelled'} onReady={setProctorReady}/>}
+ {!room?<p className="p-8">Loading shared room…</p>:<div className="grid lg:grid-cols-3 gap-6"><main className="lg:col-span-2 bg-white rounded-3xl border p-6 space-y-5">
+ {phase==='lobby'?<><h2 className="text-2xl font-black">{host?'Your tournament is ready to start':'Waiting for the host'}</h2><p>Three rounds. Five questions in each round. One shared wheel chooses each round’s section. Accuracy earns points; quicker correct decisions earn a speed bonus.</p><ol className="space-y-2 text-sm">{rounds.map((r,i)=><li key={r}><strong>Round {i+1}: {r}</strong> — {i===1?'25 seconds per decision': '15 seconds per answer'}{i===2?' · 3 lives · 100 virtual jackpot points':''}</li>)}</ol><p className="text-sm text-slate-500">Scheduled: {new Date(room.game.start_datetime).toLocaleString()}. The host can start earlier with one connected guest.</p>{host?<button onClick={()=>void act('start_remote_game')} disabled={busy||connected.length<2||!eligible} className={button}>{busy?'Starting…':'Start tournament now'}</button>:<p className="font-bold text-emerald-800">Only the host can start this tournament.</p>}<p className="text-sm">The host is participant 1. {connected.length<2?'Share the link and wait for one guest to connect.':'A guest is connected. The host can start now.'}{room.game.is_proctored?' Every connected participant must complete proctor setup first.':''}</p><details className="text-sm text-slate-600"><summary>Scoring and lifelines</summary><p className="mt-2">Rounds 1/2: 10/20 points per correct answer plus up to 5/10 for speed. Round 3: +10 points, then +30 on its last two challenges, plus up to 5 for speed. Incorrect or timed-out challenges cost 1 life, or 2 on the last two. Zero lives means spectating. Jackpot wagers add or subtract virtual points; no money is involved. Each lifeline can be used once per tournament. Ties use accuracy then total response time.</p></details></>:
+ phase==='completed'?<><h2 className="text-3xl font-black text-emerald-800">Tournament complete 🏆</h2><p>Final rankings, scores and accuracy are shown alongside. Unanswered questions count as incorrect. Jackpot gains and losses are included in the score.</p></>:phase==='cancelled'?<h2>This tournament has been cancelled.</h2>:<>
+ <div className="flex justify-between gap-4 font-bold"><span>Round {room.round?.round_number} · {rounds[(room.round?.round_number||1)-1]}</span><span role="timer" className={seconds<=5?'text-rose-600':'text-emerald-700'}>{seconds}s</span></div>
+ {phase==='wheel'&&room.round?<SharedWheel key={room.round.round_number} round={room.round}/>:phase==='countdown'?<div className="py-16 text-center text-4xl font-black">Get ready… {seconds}</div>:q?<>
+ <p className="text-sm font-semibold text-emerald-700">{room.round?.section_key} · Question {q.question_order%5+1}/5</p>
+ {q.round_number===3&&<div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex flex-wrap gap-4 font-bold"><span>Lives: {'♥'.repeat(me?.life_tokens??0)||'None — spectating'}</span><span>Jackpot: {me?.jackpot_balance} points</span><span>Reward +{q.base_points} · Risk −{q.life_cost} {q.life_cost===1?'life':'lives'}</span></div>}
+ <h2 className="text-xl font-bold leading-relaxed">{q.question_text}</h2>
+ {phase==='wager'?<div className="space-y-3"><p>Lock your virtual points wager before answering. No wager defaults to 0.</p><div className="flex flex-wrap gap-2">{[0,10,25,50,100].map(n=><button key={n} className={button} disabled={busy||!eligible||seconds===0||room.wager!==null||n>(me?.jackpot_balance??0)||(me?.life_tokens??0)<=0} onClick={()=>void act('place_contest_wager',{p_question_id:q.id,p_amount:n})}>{n===0?'Play safe · 0':n}</button>)}</div>{room.wager!==null&&<p>Wager locked: {room.wager} points.</p>}</div>:<>
+ <div className="grid gap-3">{q.options.map((option,i)=><button key={i} disabled={!canAnswer||!!room.lifelines.hidden_options?.includes(i)} onClick={()=>void act('submit_player_answer',{p_question_id:q.id,p_selected_option:i,p_response_time_ms:0})} className={`p-4 rounded-xl border-2 text-left ${q.correct_option_index===i?'border-emerald-600 bg-emerald-50':room.answer?.selected_option===i?'border-rose-500 bg-rose-50':'border-slate-200'} disabled:cursor-default`}>{String.fromCharCode(65+i)}. {room.lifelines.hidden_options?.includes(i)?'Removed by 50:50':option}</button>)}</div>
+ <div className="flex flex-wrap gap-3"><button className={button} disabled={!canAnswer||room.lifelines.used_fifty} onClick={()=>void act('use_contest_lifeline',{p_question_id:q.id,p_kind:'fifty'})}>50:50 {room.lifelines.used_fifty?'· Used':''}</button><button className={button} disabled={!canAnswer||room.lifelines.used_peek} onClick={()=>void act('use_contest_lifeline',{p_question_id:q.id,p_kind:'peek'})}>Rulebook Peek {room.lifelines.used_peek?'· Used':''}</button></div>
+ {room.lifelines.peek&&<p className="bg-blue-50 p-4 rounded-xl">{room.lifelines.peek}</p>}
+ {room.answer&&<p role="status" className="font-bold">{room.answer.selected_option<0?'Time expired':room.answer.is_correct?'Correct decision':'Incorrect decision'} · {room.answer.points_earned>0?'+':''}{room.answer.points_earned} points{room.answer.lives_lost?` · −${room.answer.lives_lost} life`:''}</p>}
+ {q.explanation&&<div className="bg-emerald-50 p-4 rounded-xl space-y-2"><h3 className="font-black">THE PSR RULE BEHIND THE DECISION</h3><strong>{q.rule_ref}</strong><p>{q.explanation}</p><p className="text-xs text-slate-500">Source: {q.source_ref}</p></div>}
+ <p className="text-xs text-slate-500">{busy?'Saving…':room.answer||phase==='reveal'?'The next question opens automatically for everyone.':'Choose before the timer ends. The server controls the deadline.'}</p></>}
+ </>:<p>Synchronizing the next stage…</p>}</>}
+ </main><aside className="bg-white border rounded-3xl p-5 space-y-4"><h2 className="font-black">Connected Room Participants ({connected.length})</h2><p className="text-xs text-slate-500">{room.players.length} registered / {room.game.max_players} capacity. Updates automatically; inactive connections expire within 25 seconds.</p><ul className="space-y-3 max-h-[40rem] overflow-y-auto">{room.players.map(p=><li key={p.user_id} className="border-b pb-3 text-sm"><div className="flex justify-between gap-2"><strong>{p.rank?`#${p.rank} `:''}{p.full_name}{p.user_id===room.game.host_id?' (Host)':''}{p.user_id===user?.id?' (You)':''}</strong><strong>{p.current_score}</strong></div><p className="text-xs text-slate-500">{p.department} · {p.connected?'Connected':'Offline'}</p>{phase==='completed'&&<p>Accuracy: {p.total_accuracy??0}%</p>}</li>)}</ul></aside></div>}</div>;
 };

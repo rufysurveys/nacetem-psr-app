@@ -1,493 +1,129 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ShieldCheck, RefreshCw, Users, Calendar, BookOpen, ClipboardList, Plus } from 'lucide-react';
 import { useStore } from '../store/useStore';
-import { Question, PSRChapter, QuestionType } from '../types';
-import { ShieldAlert, Plus, Edit2, Trash2, Calendar, BookOpen, BarChart3, AlertTriangle, CheckCircle2, Bell } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { AdminData, AdminQuestion, getAdminData } from '../services/admin';
+import { contestRpc } from '../services/remoteContest';
+import { copyTournamentLink } from '../services/roomLinks';
+import { ProctorReview } from '../components/quiz/ProctorPanel';
+
+type Tab = 'members' | 'games' | 'questions' | 'audit';
+type QuestionForm = { id: string | null; text: string; chapter: string; options: string[]; correct: number; explanation: string; section: string; rule: string; excerpt: string; kind: 'quiz' | 'scenario'; tier: number; source: string };
+const emptyQuestion = (): QuestionForm => ({ id: null, text: '', chapter: '', options: ['', '', '', ''], correct: 0, explanation: '', section:'',rule:'',excerpt:'',kind:'quiz',tier:1,source:'' });
+const buttonClass = 'border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold hover:bg-slate-100 disabled:opacity-40';
 
 export const AdminDashboard: React.FC = () => {
-  const { questions, addQuestion, updateQuestion, deleteQuestion, tournaments, antiCheatLogs, chapterAnalytics, mdas } = useStore();
+  const { user, setActivePage, fetchCloudGames } = useStore();
+  const [tab, setTab] = useState<Tab>('members');
+  const [reviewGame, setReviewGame] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const [data, setData] = useState<AdminData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [form, setForm] = useState<QuestionForm | null>(null);
+  const sequence = useRef(0);
+  const mutation = useRef(false);
+  const refresh = useCallback(async () => {
+    const request = ++sequence.current;
+    setLoading(true);
+    try { const next = await getAdminData(search, page); if (request === sequence.current) { setData(next); setError(''); } }
+    catch (e) { if (request === sequence.current) setError(e instanceof Error ? e.message : 'Could not load admin data'); }
+    finally { if (request === sequence.current) setLoading(false); }
+  }, [search, page]);
+  useEffect(() => { const timer = setTimeout(() => void refresh(), 250); return () => { clearTimeout(timer); sequence.current++; }; }, [refresh]);
 
-  const [activeTab, setActiveTab] = useState<'scheduler' | 'question_bank' | 'analytics' | 'anti_cheat'>('scheduler');
-
-  const [isQuestionModalOpen, setQuestionModalOpen] = useState(false);
-  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
-
-  const [title, setTitle] = useState('');
-  const [chapter, setChapter] = useState<PSRChapter>('Chapter 3: Discipline & Due Process');
-  const [type, setType] = useState<QuestionType>('single');
-  const [scenario, setScenario] = useState('');
-  const [opt0, setOpt0] = useState('');
-  const [opt1, setOpt1] = useState('');
-  const [opt2, setOpt2] = useState('');
-  const [opt3, setOpt3] = useState('');
-  const [correctAnswer, setCorrectAnswer] = useState(0);
-  const [explanation, setExplanation] = useState('');
-  const [ruleNumber, setRuleNumber] = useState('PSR 030301');
-  const [sectionTitle, setSectionTitle] = useState('Discipline & Queries');
-  const [excerpt, setExcerpt] = useState('');
-
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
-
-  const triggerToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 4000);
+  const act = async (rpc: string, args: Record<string, unknown>, message: string, confirmation?: string) => {
+    if (mutation.current || (confirmation && !window.confirm(confirmation))) return false;
+    mutation.current = true; setBusy(true); setError(''); setNotice('');
+    try {
+      await contestRpc(rpc, args);
+      setNotice(message);
+      await refresh(); void fetchCloudGames(); return true;
+    } catch (e) { setError(e instanceof Error ? e.message : 'Action failed'); return false; }
+    finally { mutation.current = false; setBusy(false); }
+  };
+  const memberAction = (id: string, action: string, name: string) => void act('admin_member_action', { p_user_id: id, p_action: action }, 'Member updated.',
+    action === 'delete' ? `Delete ${name} from the app? Access will be blocked. You can restore the member here; contest history is retained.` :
+    action === 'make_admin' ? `Give ${name} full administrator access to members, tournaments and questions?` :
+    action === 'make_member' ? `Remove administrator access from ${name}?` : action === 'suspend' ? `Suspend app access for ${name}?` : undefined);
+  const gameAction = (id: string, action: string, title: string) => void act('admin_game_action', { p_game_id: id, p_action: action }, 'Tournament updated.',
+    action === 'delete' ? `Delete "${title}"? It will disappear from listings and its room link will stop working. You can restore it here.` : action === 'cancel' ? `Cancel "${title}" for all participants? This stops the contest.` : undefined);
+  const editQuestion = (q: AdminQuestion) => setForm({ id: q.id, text: q.question_text, chapter: q.chapter, options: [...q.options], correct: q.correct_option_index, explanation: q.explanation || '',section:q.section_key||'',rule:q.rule_ref||'',excerpt:q.rule_excerpt||'',kind:q.question_kind||'quiz',tier:q.challenge_tier||1,source:q.source_file||'' });
+  const saveQuestion = async (e: React.FormEvent) => {
+    e.preventDefault(); if (!form) return;
+    if (await act('admin_save_contest_question', { p_id: form.id, p_text: form.text, p_chapter: form.chapter, p_options: form.options, p_correct: form.correct, p_explanation: form.explanation,p_section:form.section,p_rule:form.rule,p_excerpt:form.excerpt,p_kind:form.kind,p_tier:form.tier,p_source:form.source }, 'Question saved to the shared contest bank.')) setForm(null);
+  };
+  const copyRoom = async (id: string) => {
+    try { await copyTournamentLink(id); setNotice('Tournament room link copied.'); }
+    catch (e) { setError(e instanceof Error ? e.message : 'Could not copy link'); }
   };
 
-  const handleOpenAdd = () => {
-    setEditingQuestion(null);
-    setTitle('');
-    setScenario('');
-    setOpt0('');
-    setOpt1('');
-    setOpt2('');
-    setOpt3('');
-    setCorrectAnswer(0);
-    setExplanation('');
-    setRuleNumber('PSR 030301');
-    setSectionTitle('Queries & Due Process');
-    setExcerpt('');
-    setQuestionModalOpen(true);
-  };
-
-  const handleOpenEdit = (q: Question) => {
-    setEditingQuestion(q);
-    setTitle(q.title);
-    setChapter(q.chapter as PSRChapter);
-    setType(q.type);
-    setScenario(q.scenario || '');
-    setOpt0(q.options[0] || '');
-    setOpt1(q.options[1] || '');
-    setOpt2(q.options[2] || '');
-    setOpt3(q.options[3] || '');
-    setCorrectAnswer(q.correctAnswer as number);
-    setExplanation(q.explanation);
-    setRuleNumber(q.psrCitation.ruleNumber);
-    setSectionTitle(q.psrCitation.sectionTitle);
-    setExcerpt(q.psrCitation.excerpt);
-    setQuestionModalOpen(true);
-  };
-
-  const handleSaveQuestion = (e: React.FormEvent) => {
-    e.preventDefault();
-    const newQ: Question = {
-      id: editingQuestion ? editingQuestion.id : `q-${Date.now()}`,
-      chapter,
-      type,
-      title,
-      scenario: scenario ? scenario : undefined,
-      options: [opt0, opt1, opt2, opt3].filter(Boolean),
-      correctAnswer,
-      explanation,
-      psrCitation: {
-        ruleNumber,
-        sectionTitle,
-        excerpt: excerpt || 'Public Service Rules Regulation'
-      },
-      weightage: type === 'sjt' ? 25 : 15,
-      difficulty: type === 'sjt' ? 'Advanced' : 'Intermediate',
-      timeLimitSeconds: type === 'sjt' ? 30 : 15
-    };
-
-    if (editingQuestion) {
-      updateQuestion(newQ);
-      triggerToast('Question updated in authoritative PSR Bank');
-    } else {
-      addQuestion(newQ);
-      triggerToast('New question added to PSR Bank');
-    }
-    setQuestionModalOpen(false);
-  };
-
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fadeIn">
-      
-      {toastMsg && (
-        <div className="fixed bottom-6 right-6 z-50 bg-emerald-600 text-white px-5 py-3 rounded-2xl font-bold text-xs shadow-xl flex items-center gap-2 animate-bounce">
-          <CheckCircle2 className="w-4 h-4" />
-          <span>{toastMsg}</span>
-        </div>
-      )}
-
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white border border-slate-200 p-6 rounded-3xl shadow-sm">
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold mb-2">
-            <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
-            <span>Administrative Command Center</span>
-          </div>
-          <h1 className="text-3xl font-extrabold text-slate-900">Public Service Rules Admin Portal</h1>
-          <p className="text-xs text-slate-500 mt-1">
-            Schedule tournaments, manage citation question banks, analyze MDA training gaps, and monitor security logs.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap bg-slate-100 p-1.5 rounded-2xl border border-slate-200 text-xs font-bold gap-1">
-          <button
-            onClick={() => setActiveTab('scheduler')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
-              activeTab === 'scheduler' ? 'bg-amber-500 text-slate-950 font-extrabold shadow-sm' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Calendar className="w-4 h-4" />
-            <span>Scheduler</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('question_bank')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
-              activeTab === 'question_bank' ? 'bg-amber-500 text-slate-950 font-extrabold shadow-sm' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <BookOpen className="w-4 h-4" />
-            <span>Question Bank ({questions.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('analytics')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
-              activeTab === 'analytics' ? 'bg-amber-500 text-slate-950 font-extrabold shadow-sm' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4" />
-            <span>MDA Gap Analytics</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('anti_cheat')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
-              activeTab === 'anti_cheat' ? 'bg-amber-500 text-slate-950 font-extrabold shadow-sm' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <AlertTriangle className="w-4 h-4" />
-            <span>Anti-Cheat Logs ({antiCheatLogs.length})</span>
-          </button>
-        </div>
-      </div>
-
-      {activeTab === 'scheduler' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-slate-900">Active Tournaments</h2>
-            <button
-              onClick={() => triggerToast('Automated SMS & Push notifications broadcast scheduled.')}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 shadow transition-all"
-            >
-              <Bell className="w-4 h-4" />
-              <span>Trigger Tournament Reminders</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {tournaments.map((t) => (
-              <div key={t.id} className="bright-card p-6 rounded-3xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="px-3 py-1 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold">
-                    {t.status.toUpperCase()}
-                  </span>
-                  <span className="text-xs text-slate-500">{t.season}</span>
-                </div>
-
-                <h3 className="text-2xl font-bold text-slate-900">{t.title}</h3>
-
-                <div className="grid grid-cols-2 gap-3 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-200">
-                  <div>
-                    <span className="text-slate-500 block">Registration Cutoff</span>
-                    <span className="font-mono text-slate-800">{new Date(t.registrationCutoff).toLocaleDateString()}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block">Registered Officers</span>
-                    <span className="font-bold text-emerald-700">{t.totalRegistered}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-3 pt-2">
-                  <h4 className="text-xs font-extrabold text-slate-700 uppercase">Stage Criteria Settings</h4>
-                  {t.stages.map((stage) => (
-                    <div key={stage.stageNumber} className="flex items-center justify-between text-xs p-3 rounded-xl bg-white border border-slate-200">
-                      <div>
-                        <span className="font-bold text-slate-900">Stage {stage.stageNumber}: {stage.name}</span>
-                        <p className="text-[11px] text-slate-500">{stage.format}</p>
-                      </div>
-                      <span className="font-extrabold text-amber-800 bg-amber-50 px-2.5 py-1 rounded border border-amber-200">
-                        {stage.passCriteria}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'question_bank' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold text-slate-900">Question & Rule Citation Bank</h2>
-              <p className="text-xs text-slate-500">Manage questions tagged by PSR chapters and citations.</p>
-            </div>
-            <button
-              onClick={handleOpenAdd}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add New Question</span>
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            {questions.map((q) => (
-              <div key={q.id} className="bright-card p-6 rounded-3xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-2 max-w-3xl">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold text-[10px]">
-                      {q.chapter}
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold text-[10px]">
-                      {q.psrCitation.ruleNumber}
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded bg-amber-50 text-amber-800 font-bold text-[10px]">
-                      {q.type.toUpperCase()}
-                    </span>
-                  </div>
-                  <h3 className="text-base font-bold text-slate-900">{q.title}</h3>
-                  <p className="text-xs text-slate-600">{q.explanation}</p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleOpenEdit(q)}
-                    className="p-2.5 rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      deleteQuestion(q.id);
-                      triggerToast('Question deleted');
-                    }}
-                    className="p-2.5 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'analytics' && (
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">MDA Training Gap Analytics</h2>
-            <p className="text-xs text-slate-500">Identifies PSR chapters with highest failure rates across departments.</p>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bright-card p-6 rounded-3xl space-y-4">
-              <h3 className="text-sm font-extrabold text-slate-800 uppercase">Chapter Failure Rates (%)</h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chapterAnalytics}>
-                    <XAxis dataKey="chapter" stroke="#64748b" tick={{ fontSize: 10 }} />
-                    <YAxis stroke="#64748b" tick={{ fontSize: 10 }} />
-                    <Tooltip contentStyle={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px' }} />
-                    <Bar dataKey="failureRate" fill="#10b981" radius={[8, 8, 0, 0]}>
-                      {chapterAnalytics.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.failureRate > 35 ? '#e11d48' : '#059669'} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            <div className="bright-card p-6 rounded-3xl space-y-4">
-              <h3 className="text-sm font-extrabold text-slate-800 uppercase">MDA Accuracy Rates (%)</h3>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={mdas}>
-                    <XAxis dataKey="shortName" stroke="#64748b" tick={{ fontSize: 10 }} />
-                    <YAxis stroke="#64748b" tick={{ fontSize: 10 }} />
-                    <Tooltip contentStyle={{ background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px' }} />
-                    <Bar dataKey="accuracyRate" fill="#2563eb" radius={[8, 8, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'anti_cheat' && (
-        <div className="space-y-6">
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">Anti-Cheat Audit Logs</h2>
-            <p className="text-xs text-slate-500">Flagged events during tournament quizzes: tab switching, rapid guessing, duplicate IPs.</p>
-          </div>
-
-          <div className="bright-card rounded-3xl overflow-hidden">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 font-bold text-slate-500 uppercase border-b border-slate-200">
-                <tr>
-                  <th className="px-6 py-4">Timestamp</th>
-                  <th className="px-6 py-4">Officer Name</th>
-                  <th className="px-6 py-4">MDA</th>
-                  <th className="px-6 py-4">Flag Event</th>
-                  <th className="px-6 py-4">Severity</th>
-                  <th className="px-6 py-4">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {antiCheatLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 font-mono text-slate-500">
-                      {new Date(log.timestamp).toLocaleTimeString()}
-                    </td>
-                    <td className="px-6 py-4 font-bold text-slate-900">{log.userName}</td>
-                    <td className="px-6 py-4 text-slate-700">{log.mdaName}</td>
-                    <td className="px-6 py-4 font-mono text-amber-700 uppercase font-bold">{log.eventType}</td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-0.5 rounded font-extrabold text-[10px] ${
-                        log.severity === 'high' ? 'bg-rose-100 text-rose-800 border border-rose-200' :
-                        log.severity === 'medium' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-slate-100 text-slate-700'
-                      }`}>
-                        {log.severity.toUpperCase()}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-slate-600">{log.details}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {isQuestionModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-fadeIn">
-          <div className="relative w-full max-w-2xl bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 space-y-4 max-h-[90vh] overflow-y-auto shadow-2xl">
-            <h3 className="text-xl font-bold text-slate-900">
-              {editingQuestion ? 'Edit Question & Citation' : 'Add New Question & PSR Citation'}
-            </h3>
-
-            <form onSubmit={handleSaveQuestion} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Question Title</label>
-                <input
-                  type="text"
-                  required
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Disciplinary Interdiction Salary Rules"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-900"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">PSR Chapter</label>
-                  <select
-                    value={chapter}
-                    onChange={(e) => setChapter(e.target.value as any)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
-                  >
-                    <option value="Chapter 1: Structure & Appointments">Chapter 1: Structure</option>
-                    <option value="Chapter 3: Discipline & Due Process">Chapter 3: Discipline</option>
-                    <option value="Chapter 7: Leave & Allowances">Chapter 7: Leave</option>
-                    <option value="Chapter 10: Petitions & Appeals">Chapter 10: Petitions</option>
-                    <option value="Chapter 13: Procurement & Public Ethics">Chapter 13: Procurement</option>
-                    <option value="Chapter 15: Promotion & Evaluation">Chapter 15: Promotion</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Format</label>
-                  <select
-                    value={type}
-                    onChange={(e) => setType(e.target.value as any)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
-                  >
-                    <option value="single">Single Choice</option>
-                    <option value="sjt">Situational Judgment Test (SJT)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Practical Scenario</label>
-                <textarea
-                  rows={2}
-                  value={scenario}
-                  onChange={(e) => setScenario(e.target.value)}
-                  placeholder="e.g. An officer on Grade Level 12 was absent from duty..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-900"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Option A</label>
-                  <input type="text" required value={opt0} onChange={(e) => setOpt0(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-900" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Option B</label>
-                  <input type="text" required value={opt1} onChange={(e) => setOpt1(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-900" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Option C</label>
-                  <input type="text" required value={opt2} onChange={(e) => setOpt2(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-900" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Option D</label>
-                  <input type="text" required value={opt3} onChange={(e) => setOpt3(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-900" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Correct Option</label>
-                  <select value={correctAnswer} onChange={(e) => setCorrectAnswer(Number(e.target.value))} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900">
-                    <option value={0}>Option A</option>
-                    <option value={1}>Option B</option>
-                    <option value={2}>Option C</option>
-                    <option value={3}>Option D</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Rule Citation No.</label>
-                  <input type="text" required value={ruleNumber} onChange={(e) => setRuleNumber(e.target.value)} placeholder="PSR 030402" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Rulebook Section</label>
-                  <input type="text" required value={sectionTitle} onChange={(e) => setSectionTitle(e.target.value)} placeholder="Interdiction & Salary" className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Rulebook Excerpt</label>
-                <textarea rows={2} value={excerpt} onChange={(e) => setExcerpt(e.target.value)} placeholder="Quote from PSR rulebook..." className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900" />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Explanation</label>
-                <textarea rows={2} required value={explanation} onChange={(e) => setExplanation(e.target.value)} placeholder="Explain why answer is correct under due process..." className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900" />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
-                <button type="button" onClick={() => setQuestionModalOpen(false)} className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:text-slate-900">
-                  Cancel
-                </button>
-                <button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2 rounded-xl text-xs shadow">
-                  Save Question
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
+  return <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+    <header className="bg-emerald-950 text-white p-6 rounded-3xl flex flex-wrap justify-between gap-5">
+      <div><p className="text-emerald-200 flex gap-2 items-center text-sm"><ShieldCheck size={18}/>Administrator</p><h1 className="text-3xl font-extrabold mt-2">Manage the PSR platform</h1><p className="text-sm text-emerald-100 mt-2">Signed in as {user?.email}. Changes are saved centrally for all devices.</p></div>
+      <button onClick={() => void refresh()} disabled={loading || busy} className="flex gap-2 items-center"><RefreshCw className={loading ? 'animate-spin' : ''} size={18}/>Refresh</button>
+    </header>
+    <nav className="flex flex-wrap gap-2">{([
+      ['members', 'Members', Users], ['games', 'Tournaments', Calendar], ['questions', 'Contest questions', BookOpen], ['audit', 'Admin activity', ClipboardList],
+    ] as const).map(([id, label, Icon]) => <button key={id} onClick={() => setTab(id)} className={`flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold ${tab === id ? 'bg-emerald-700 text-white' : 'bg-white border'}`}><Icon size={18}/>{label}</button>)}</nav>
+    {error && <div role="alert" className="bg-rose-50 border border-rose-200 p-4 rounded-xl text-rose-800">{error}</div>}
+    {notice && <div role="status" className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl text-emerald-800">{notice}</div>}
+    {tab !== 'audit' && <input aria-label="Search admin records" placeholder="Search by name, email, tournament or question..." value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} className="w-full border rounded-xl p-3 bg-white"/>}
+    {loading && !data ? <p className="p-10 text-center">Loading administrator records...</p> : data && <>
+      {tab === 'members' && <section className="bg-white border rounded-2xl p-5 space-y-4">
+        <div><h2 className="text-xl font-bold">Members ({data.members.length})</h2><p className="text-sm text-slate-500">Delete blocks access and preserves history. Restore brings the member back. Showing up to 500 matches; use search to find anyone.</p></div>
+        {!data.members.length && <p>No matching members.</p>}
+        <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead><tr className="border-b"><th className="p-3">Member</th><th className="p-3">Organization</th><th className="p-3">Access</th><th className="p-3">Actions</th></tr></thead><tbody>{data.members.map(m => <tr key={m.user_id} className="border-b align-top">
+          <td className="p-3"><strong>{m.full_name}</strong><p className="text-slate-500">{m.email}</p></td><td className="p-3">{m.agency}<p className="text-slate-500">{m.department}</p></td><td className="p-3">{m.role}<p>{m.deleted_at ? 'Deleted' : m.suspended ? 'Suspended' : 'Active'}</p></td>
+          <td className="p-3"><div className="flex flex-wrap gap-2">{m.user_id === user?.id ? <span className="text-slate-500">Your administrator account</span> : m.deleted_at ? <button className={buttonClass} disabled={busy} onClick={() => memberAction(m.user_id, 'restore', m.full_name)}>Restore member</button> : <>
+            <button className={buttonClass} disabled={busy} onClick={() => memberAction(m.user_id, m.suspended ? 'resume' : 'suspend', m.full_name)}>{m.suspended ? 'Resume access' : 'Suspend'}</button>
+            <button className={buttonClass} disabled={busy} onClick={() => memberAction(m.user_id, m.role === 'admin' ? 'make_member' : 'make_admin', m.full_name)}>{m.role === 'admin' ? 'Remove admin' : 'Make admin'}</button>
+            <button className={`${buttonClass} text-rose-700`} disabled={busy} onClick={() => memberAction(m.user_id, 'delete', m.full_name)}>Delete member</button>
+          </>}</div></td>
+        </tr>)}</tbody></table></div>
+      </section>}
+      {tab === 'games' && <section className="space-y-4">
+        <div className="flex justify-between items-center"><h2 className="text-xl font-bold">Tournaments ({data.games.length})</h2><button className={buttonClass} onClick={() => setActivePage('schedule')}>Schedule a tournament</button></div>
+        {!data.games.length && <p className="bg-white p-6 rounded-xl">No matching tournaments.</p>}
+        <div className="grid md:grid-cols-2 gap-4">{data.games.map(g => <article key={g.id} className="bg-white border rounded-2xl p-5 space-y-3">
+          <div className="flex justify-between gap-3"><h3 className="font-bold text-lg">{g.title}</h3><span className="text-xs font-bold">{g.deleted_at ? 'DELETED' : g.status.toUpperCase()}</span></div>
+          <p className="text-sm">Host: {g.host_name || 'No host assigned'} · {g.participant_count} participants (including host)</p><p className="text-sm text-slate-500">{new Date(g.start_datetime).toLocaleString()} · {g.target_org}</p>
+          <div className="flex flex-wrap gap-2">{g.deleted_at ? <button className={buttonClass} disabled={busy} onClick={() => gameAction(g.id, 'restore', g.title)}>Restore tournament</button> : <>
+            <button className={buttonClass} onClick={() => void copyRoom(g.id)}>Copy room link</button>
+            <button className={buttonClass} onClick={() => setReviewGame(reviewGame===g.id?null:g.id)}>Review proctoring</button>
+            {!['completed', 'cancelled'].includes(g.status) && <button className={buttonClass} disabled={busy} onClick={() => gameAction(g.id, 'cancel', g.title)}>Cancel contest</button>}
+            <button className={`${buttonClass} text-rose-700`} disabled={busy} onClick={() => gameAction(g.id, 'delete', g.title)}>Delete tournament</button>
+          </>}</div>
+        </article>)}</div>
+        {reviewGame && <div className="bg-white border rounded-2xl p-5"><ProctorReview gameId={reviewGame}/></div>}
+      </section>}
+      {tab === 'questions' && <section className="space-y-4">
+        <div className="flex flex-wrap justify-between gap-3"><div><h2 className="text-xl font-bold">Shared contest question bank ({data.question_total})</h2><p className="text-sm text-slate-500">Changes apply to future contests. Started matches keep their original questions.</p></div><button className={buttonClass} onClick={() => setForm(emptyQuestion())}><Plus size={16} className="inline mr-1"/>Add question</button></div>
+        {!data.questions.length && <p>No matching questions.</p>}
+        {data.questions.map(q => <article key={q.id} className="bg-white border rounded-2xl p-5 space-y-3">
+          <p className="text-xs text-slate-500">{q.chapter}{q.is_archived ? ' · ARCHIVED' : ''}</p><h3 className="font-bold">{q.question_text}</h3>
+          <ol className="grid sm:grid-cols-2 gap-2 text-sm">{q.options.map((option, i) => <li key={i} className={i === q.correct_option_index ? 'text-emerald-700 font-bold' : ''}>{String.fromCharCode(65 + i)}. {option}{i === q.correct_option_index ? ' (correct)' : ''}</li>)}</ol>
+          <div className="flex gap-2"><button className={buttonClass} disabled={busy} onClick={() => editQuestion(q)}>Edit question</button><button className={buttonClass} disabled={busy} onClick={() => void act('admin_archive_question', { p_id: q.id, p_archived: !q.is_archived }, q.is_archived ? 'Question restored.' : 'Question archived.', q.is_archived ? undefined : 'Archive this question so future contests cannot select it?')}>{q.is_archived ? 'Restore question' : 'Archive question'}</button></div>
+        </article>)}
+        <div className="flex items-center justify-center gap-4"><button className={buttonClass} disabled={page === 0 || loading} onClick={() => setPage(p => p - 1)}>Previous</button><span>Page {page + 1} of {Math.max(1, Math.ceil(data.question_total / 25))}</span><button className={buttonClass} disabled={(page + 1) * 25 >= data.question_total || loading} onClick={() => setPage(p => p + 1)}>Next</button></div>
+      </section>}
+      {tab === 'audit' && <section className="bg-white border rounded-2xl p-5 space-y-4"><h2 className="text-xl font-bold">Latest 100 administrator actions</h2>{!data.audit.length && <p>No administrator actions recorded yet.</p>}<ul className="divide-y">{data.audit.map(a => <li key={a.id} className="py-3 text-sm"><strong>{a.actor_name || 'Administrator'}</strong> · {a.action.split('_').join(' ')}<p className="text-slate-500">{new Date(a.created_at).toLocaleString()} · Record {a.target_id}</p></li>)}</ul></section>}
+    </>}
+    {form && <div className="fixed inset-0 z-50 bg-slate-950/60 p-4 overflow-y-auto flex items-start justify-center"><form onSubmit={saveQuestion} className="bg-white rounded-3xl p-6 max-w-2xl w-full my-8 space-y-4">
+      <h2 className="font-bold text-xl">{form.id ? 'Edit question' : 'Add contest question'}</h2>
+      {error && <p role="alert" className="text-rose-700">{error}</p>}
+      <label className="block text-sm font-bold">Chapter<input required value={form.chapter} onChange={e => setForm({ ...form, chapter: e.target.value })} className="mt-1 w-full border rounded-xl p-3"/></label>
+      <p className="text-sm text-slate-600">Verify the answer against the cited source before saving. A section needs at least five eligible questions of its type to appear on the wheel. An empty section means this question is excluded pending review.</p>
+      {(['section','rule','source'] as const).map(key=><label key={key} className="block text-sm font-bold">{key==='section'?'Wheel section (for example Chapter 12 Section 2)':key==='rule'?'PSR rule reference':'Source document / sheet'}<input required value={form[key]} onChange={e=>setForm({...form,[key]:e.target.value})} className="mt-1 w-full border rounded-xl p-3"/></label>)}
+      <label className="block text-sm font-bold">Rulebook Peek excerpt<textarea required value={form.excerpt} onChange={e=>setForm({...form,excerpt:e.target.value})} className="mt-1 w-full border rounded-xl p-3"/></label>
+      <div className="flex gap-3"><label>Question type<select value={form.kind} onChange={e=>setForm({...form,kind:e.target.value as 'quiz'|'scenario'})} className="block border rounded-lg p-2"><option value="quiz">Round 1 quiz</option><option value="scenario">Round 2/3 scenario</option></select></label><label>Difficulty<select value={form.tier} onChange={e=>setForm({...form,tier:Number(e.target.value)})} className="block border rounded-lg p-2"><option value={1}>Foundation</option><option value={2}>Intermediate</option><option value={3}>Advanced</option></select></label></div>
+      <label className="block text-sm font-bold">Question<textarea required value={form.text} onChange={e => setForm({ ...form, text: e.target.value })} className="mt-1 w-full border rounded-xl p-3"/></label>
+      {form.options.map((option, i) => <label key={i} className="block text-sm font-bold">Option {String.fromCharCode(65 + i)}<input required value={option} onChange={e => setForm({ ...form, options: form.options.map((v, j) => j === i ? e.target.value : v) })} className="mt-1 w-full border rounded-xl p-3"/></label>)}
+      <label className="block text-sm font-bold">Correct answer<select value={form.correct} onChange={e => setForm({ ...form, correct: Number(e.target.value) })} className="mt-1 w-full border rounded-xl p-3">{form.options.map((_, i) => <option key={i} value={i}>Option {String.fromCharCode(65 + i)}</option>)}</select></label>
+      <label className="block text-sm font-bold">Explanation<textarea value={form.explanation} onChange={e => setForm({ ...form, explanation: e.target.value })} className="mt-1 w-full border rounded-xl p-3"/></label>
+      <div className="flex justify-end gap-3"><button type="button" disabled={busy} className={buttonClass} onClick={() => setForm(null)}>Cancel</button><button disabled={busy} className="bg-emerald-700 text-white px-5 py-2 rounded-xl font-bold disabled:opacity-50">{busy ? 'Saving...' : 'Save question'}</button></div>
+    </form></div>}
+  </div>;
 };

@@ -4,6 +4,7 @@ import { Tournament } from '../types';
 import { ExtendedCompMode } from '../store/useStore';
 import { FEDERAL_MINISTRIES_AND_AGENCIES } from '../data/ministriesAndAgencies';
 import { X, Trophy, Building2, Globe, Award, ChevronRight, Users } from 'lucide-react';
+import { rememberTournamentLink } from '../services/roomLinks';
 import { cloudDatabaseService } from '../services/supabase';
 
 interface Props {
@@ -12,9 +13,10 @@ interface Props {
 }
 
 export const ScheduleTournamentModal: React.FC<Props> = ({ isOpen, onClose }) => {
-  const { user, fetchCloudGames } = useStore();
+  const { user, fetchCloudGames, setSelectedOpponent, setActivePage } = useStore();
 
   const [title, setTitle] = useState('');
+  const [isProctored, setIsProctored] = useState(false);
   const [competitionMode, setCompMode] = useState<ExtendedCompMode>('intra_dept');
   
   const [selectedMinistry, setSelectedMinistry] = useState(
@@ -60,12 +62,13 @@ export const ScheduleTournamentModal: React.FC<Props> = ({ isOpen, onClose }) =>
       // 1. Create game directly in Supabase Cloud DB
       const createdGame = await cloudDatabaseService.createGame({
         host_id: user.id,
+        is_proctored: isProctored,
         title: tournTitle,
         competition_mode: competitionMode === 'inter_agency' ? 'inter_agency' : 'intra_dept',
         target_org: targetOrg,
         start_datetime: `${startDate}T09:00:00Z`,
-        cutoff_datetime: `${startDate}T23:59:59Z`,
-        max_players: 50,
+        cutoff_datetime: `${startDate}T09:00:00Z`,
+        max_players: 200,
         status: 'scheduled',
         description: `Official competition hosted by ${user.name}`
       });
@@ -73,6 +76,9 @@ export const ScheduleTournamentModal: React.FC<Props> = ({ isOpen, onClose }) =>
       // 2. Refresh central dbGames from Supabase
       await fetchCloudGames();
       onClose();
+      rememberTournamentLink(createdGame.id);
+      setSelectedOpponent({ gameId: createdGame.id, title: createdGame.title });
+      setActivePage('remotematch');
     } catch (err: any) {
       console.error('Modal create game error:', err);
       alert(`Could not create tournament in central database: ${err.message}`);
@@ -100,6 +106,8 @@ export const ScheduleTournamentModal: React.FC<Props> = ({ isOpen, onClose }) =>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <label className="block text-sm font-bold">Tournament type<select value={String(isProctored)} onChange={e=>setIsProctored(e.target.value==='true')} className="block w-full border rounded-xl p-3 mt-2"><option value="false">Schedule New Tournament — no proctoring</option><option value="true">Schedule Proctored Tournament</option></select></label>
+          <p className="text-xs text-slate-500">Both options use the same three timed rounds, wheel, lifelines, lives and virtual jackpot. Proctored tournaments also require camera, entire-screen sharing, fullscreen and consent.</p>
           
           {/* Competition Mode Select */}
           <div>

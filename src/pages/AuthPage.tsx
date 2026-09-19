@@ -3,6 +3,7 @@ import { useStore } from '../store/useStore';
 import { CadreRank } from '../types';
 import { FEDERAL_MINISTRIES_AND_AGENCIES } from '../data/ministriesAndAgencies';
 import { supabase, cloudDatabaseService } from '../services/supabase';
+import { tournamentLink } from '../services/roomLinks';
 import { ShieldCheck, Mail, Building2, User, Sparkles, Zap, Users, Globe, Camera, CheckCircle2, RefreshCw, Lock, LogIn, UserPlus, ExternalLink, AlertCircle } from 'lucide-react';
 
 export const CURATED_AVATARS = [
@@ -103,9 +104,9 @@ export const AuthPage: React.FC = () => {
           const dept = meta.department || 'Administration';
           const avatar = meta.avatar_url || CURATED_AVATARS[0].url;
 
-          setTimeout(() => {
+          if (useStore.getState().user?.id !== u.id) {
             loginWithDomain(u.email || '', name, mda, cadre, dept, avatar, u.id);
-          }, 2000);
+          }
         }
       });
     }
@@ -123,9 +124,8 @@ export const AuthPage: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      const redirectUrl = window.location.origin.includes('localhost') 
-        ? window.location.origin 
-        : 'https://psr-gamification-app.vercel.app';
+      const invitedGame = new URLSearchParams(window.location.search).get('match');
+      const redirectUrl = invitedGame ? tournamentLink(invitedGame) : window.location.origin;
 
       // 1. Supabase Auth Sign Up (Triggers real confirmation email dispatch)
       const { data, error } = await supabase.auth.signUp({
@@ -340,7 +340,7 @@ export const AuthPage: React.FC = () => {
               className="w-full bg-white/15 hover:bg-white/25 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all border border-white/20 flex items-center justify-center gap-2"
             >
               <Zap className="w-4 h-4 text-emerald-300" />
-              <span>Quick Demo Sign In (NACETEM Officer)</span>
+              <span>Practice demo (remote contests require your own account)</span>
             </button>
           </div>
         </div>
