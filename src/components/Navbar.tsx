@@ -1,9 +1,19 @@
 import React from 'react';
 import { useStore, ActivePage } from '../store/useStore';
-import { Shield, Trophy, BookOpen, BarChart3, LogOut, CheckCircle2, ShieldAlert, Zap, Building2, Globe, Calendar } from 'lucide-react';
+import { Shield, Trophy, BookOpen, BarChart3, LogOut, CheckCircle2, ShieldAlert, Zap, Building2, Globe, Calendar, RefreshCw } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { activePage, setActivePage, user, logout, competitionMode, setCompetitionMode } = useStore();
+  const [isSigningOut, setIsSigningOut] = React.useState(false);
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    try {
+      await logout();
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
 
   const essentialNavItems: { id: ActivePage; label: string; icon: React.ReactNode }[] = [
     { id: 'schedule', label: 'Scheduled Tournaments', icon: <Calendar className="w-4 h-4" /> },
@@ -111,11 +121,12 @@ export const Navbar: React.FC = () => {
                 className="w-9 h-9 rounded-full ring-2 ring-emerald-500/30 object-cover cursor-pointer hover:ring-emerald-600 transition-all"
               />
               <button
-                onClick={logout}
+                onClick={handleSignOut}
+                disabled={isSigningOut}
                 title="Sign Out"
-                className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50"
               >
-                <LogOut className="w-4 h-4" />
+                {isSigningOut ? <RefreshCw className="w-4 h-4 animate-spin text-rose-600" /> : <LogOut className="w-4 h-4" />}
               </button>
             </div>
           </div>

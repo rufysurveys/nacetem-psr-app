@@ -1,10 +1,20 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { CadreRank } from '../types';
-import { ShieldCheck, Award, Building2, CheckCircle2, Clock, Upload, Camera, LogOut, Edit2, Save, X } from 'lucide-react';
+import { ShieldCheck, Award, Building2, CheckCircle2, Clock, Upload, Camera, LogOut, Edit2, Save, X, RefreshCw } from 'lucide-react';
 
 export const UserProfilePage: React.FC = () => {
   const { user, userAttempts, updateUserProfile, logout } = useStore();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setIsSigningOut(true);
+    try {
+      await logout();
+    } finally {
+      setIsSigningOut(false);
+    }
+  };
 
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
@@ -101,11 +111,21 @@ export const UserProfilePage: React.FC = () => {
             </button>
 
             <button
-              onClick={logout}
-              className="flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold px-4 py-2.5 rounded-xl text-xs transition-all border border-rose-200"
+              onClick={handleSignOut}
+              disabled={isSigningOut}
+              className="flex items-center gap-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold px-4 py-2.5 rounded-xl text-xs transition-all border border-rose-200 disabled:opacity-50"
             >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Sign Out</span>
+              {isSigningOut ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-rose-700" />
+                  <span>Signing Out...</span>
+                </>
+              ) : (
+                <>
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Sign Out</span>
+                </>
+              )}
             </button>
           </div>
 

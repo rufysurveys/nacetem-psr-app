@@ -50,27 +50,48 @@ export const App: React.FC = () => {
     }
   }, [access, user?.id, user?.role, updateUserProfile]);
 
-  // 1. Automatic Supabase Auth Session Recovery on Mount
+  // 1. Reactive Supabase Auth Session Management & Synchronization
   useEffect(() => {
+    const handleAuthUser = async (u: any) => {
+      if (!u) return;
+      if (useStore.getState().user?.id === u.id) return;
+      try {
+        const profile = await cloudDatabaseService.fetchProfileByUserId(u.id);
+        const meta = u.user_metadata || {};
+        const email = profile?.email || u.email || '';
+        const name = profile?.full_name || meta.full_name || email.split('@')[0] || 'Civil Servant';
+        const mda = profile?.agency || profile?.ministry || meta.agency || meta.ministry || 'Federal Civil Service';
+        const cadre = profile?.cadre || meta.cadre || 'Senior Executive Officer (GL 10)';
+        const dept = profile?.department || meta.department || 'Administration';
+        const avatar = profile?.avatar_url || meta.avatar_url || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200';
+
+        loginWithDomain(email, name, mda, cadre, dept, avatar, u.id);
+      } catch (err) {
+        console.warn('Auth sync error:', err);
+      }
+    };
+
+    // Initial session check
     supabase.auth.getSession().then(({ data }) => {
       if (data.session?.user) {
-        const u = data.session.user;
-        cloudDatabaseService.fetchProfileByUserId(u.id).then(profile => {
-          if (useStore.getState().user?.id === u.id) return;
-          if (profile) {
-            loginWithDomain(
-              profile.email,
-              profile.full_name,
-              profile.agency || profile.ministry,
-              profile.cadre,
-              profile.department,
-              profile.avatar_url,
-              u.id
-            );
-          }
-        });
+        void handleAuthUser(data.session.user);
       }
     });
+
+    // Reactive auth listener
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        if (useStore.getState().user) {
+          useStore.getState().setUser(null);
+        }
+      } else if (session?.user) {
+        void handleAuthUser(session.user);
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, [loginWithDomain]);
 
   // 2. Continuous global background cloud sync across all devices via Supabase -> dbGames

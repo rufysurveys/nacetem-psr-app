@@ -4,7 +4,7 @@ import { CadreRank } from '../types';
 import { FEDERAL_MINISTRIES_AND_AGENCIES } from '../data/ministriesAndAgencies';
 import { supabase, cloudDatabaseService } from '../services/supabase';
 import { tournamentLink } from '../services/roomLinks';
-import { ShieldCheck, Mail, Building2, User, Sparkles, Zap, Users, Globe, Camera, CheckCircle2, RefreshCw, Lock, LogIn, UserPlus, ExternalLink, AlertCircle } from 'lucide-react';
+import { ShieldCheck, Mail, Building2, User, Sparkles, Zap, Users, Globe, Camera, CheckCircle2, RefreshCw, Lock, LogIn, UserPlus, ExternalLink, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export const CURATED_AVATARS = [
   { id: 'av-1', title: 'Executive Officer Female', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200' },
@@ -28,6 +28,7 @@ export const AuthPage: React.FC = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showSignUpPassword, setShowSignUpPassword] = useState(false);
 
   // Avatar / Custom Photo Upload State
   const [selectedAvatarUrl, setSelectedAvatarUrl] = useState<string>(CURATED_AVATARS[0].url);
@@ -57,6 +58,7 @@ export const AuthPage: React.FC = () => {
   // --- SIGN IN FORM STATE ---
   const [signInEmail, setSignInEmail] = useState('');
   const [signInPassword, setSignInPassword] = useState('');
+  const [showSignInPassword, setShowSignInPassword] = useState(false);
   const [signInError, setSignInError] = useState<string | null>(null);
 
   // --- EMAIL VERIFICATION STATE ---
@@ -355,6 +357,8 @@ export const AuthPage: React.FC = () => {
               onClick={() => {
                 setAuthTab('signup');
                 setRegStep('form');
+                setSignUpError(null);
+                setSignInError(null);
               }}
               className={`flex-1 py-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
                 authTab === 'signup' 
@@ -370,6 +374,8 @@ export const AuthPage: React.FC = () => {
               onClick={() => {
                 setAuthTab('signin');
                 setRegStep('form');
+                setSignUpError(null);
+                setSignInError(null);
               }}
               className={`flex-1 py-3 rounded-xl transition-all flex items-center justify-center gap-2 ${
                 authTab === 'signin' 
@@ -439,13 +445,21 @@ export const AuthPage: React.FC = () => {
                       <div className="relative">
                         <Lock className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                         <input
-                          type="password"
+                          type={showSignUpPassword ? "text" : "password"}
                           required
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           placeholder="••••••••••••"
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-10 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowSignUpPassword(!showSignUpPassword)}
+                          className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 transition-colors"
+                          title={showSignUpPassword ? "Hide Password" : "Show Password"}
+                        >
+                          {showSignUpPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -722,13 +736,24 @@ export const AuthPage: React.FC = () => {
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
                   <input
-                    type="password"
+                    type={showSignInPassword ? "text" : "password"}
                     required
                     value={signInPassword}
-                    onChange={(e) => setSignInPassword(e.target.value)}
+                    onChange={(e) => {
+                      setSignInPassword(e.target.value);
+                      if (signInError) setSignInError(null);
+                    }}
                     placeholder="••••••••••••"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-10 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowSignInPassword(!showSignInPassword)}
+                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 transition-colors"
+                    title={showSignInPassword ? "Hide Password" : "Show Password"}
+                  >
+                    {showSignInPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
                 </div>
               </div>
 
@@ -738,11 +763,16 @@ export const AuthPage: React.FC = () => {
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
               >
                 {isSubmitting ? (
-                  <RefreshCw className="w-4 h-4 animate-spin" />
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Authenticating officer...</span>
+                  </>
                 ) : (
-                  <LogIn className="w-4 h-4" />
+                  <>
+                    <LogIn className="w-4 h-4" />
+                    <span>Sign In to Platform</span>
+                  </>
                 )}
-                <span>Sign In to Platform</span>
               </button>
             </form>
           )}

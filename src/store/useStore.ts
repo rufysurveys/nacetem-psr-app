@@ -168,7 +168,11 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   logout: async () => {
-    await supabase.auth.signOut({ scope: 'local' });
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('Sign out notice:', err);
+    }
     set({ user: null, activePage: 'schedule', dbGames: [], selectedOpponent: null });
   },
 
