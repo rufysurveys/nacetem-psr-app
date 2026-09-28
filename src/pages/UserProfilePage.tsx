@@ -28,6 +28,12 @@ export const UserProfilePage: React.FC = () => {
   const [cadre, setCadre] = useState<CadreRank>(user?.cadre || 'Chief Administrative Officer (GL 14)');
   const [avatar, setAvatar] = useState(user?.avatar || '');
 
+  React.useEffect(() => {
+    if (user?.avatar) {
+      setAvatar(user.avatar);
+    }
+  }, [user?.avatar]);
+
   if (!user) return null;
 
   const presetAvatars = [
@@ -287,9 +293,29 @@ export const UserProfilePage: React.FC = () => {
                     key={idx}
                     src={url}
                     alt={`Avatar ${idx}`}
-                    onClick={() => {
+                    onClick={async () => {
                       setAvatar(url);
                       updateUserProfile({ avatar: url });
+                      try {
+                        localStorage.setItem(`user_avatar_${user.id}`, url);
+                        await cloudDatabaseService.upsertProfile({
+                          user_id: user.id,
+                          full_name: user.name,
+                          email: user.email,
+                          ministry: user.mdaName,
+                          agency: user.mdaName,
+                          department: user.department,
+                          cadre: user.cadre,
+                          avatar_url: url
+                        });
+                        await supabase.auth.updateUser({
+                          data: { avatar_url: url }
+                        });
+                        setUploadNotice('✓ Avatar picture updated and saved!');
+                        setTimeout(() => setUploadNotice(null), 3000);
+                      } catch (err) {
+                        console.error('Preset avatar save notice:', err);
+                      }
                     }}
                     className={`w-12 h-12 rounded-full object-cover cursor-pointer ring-2 transition-all hover:scale-105 ${
                       avatar === url ? 'ring-emerald-600 ring-offset-2' : 'ring-slate-200'

@@ -4,6 +4,7 @@ import { CadreRank } from '../types';
 import { FEDERAL_MINISTRIES_AND_AGENCIES } from '../data/ministriesAndAgencies';
 import { supabase, cloudDatabaseService } from '../services/supabase';
 import { tournamentLink } from '../services/roomLinks';
+import { compressImageFile } from '../utils/imageCompressor';
 import { ShieldCheck, Mail, Building2, User, Sparkles, Zap, Users, Globe, Camera, CheckCircle2, RefreshCw, Lock, LogIn, UserPlus, ExternalLink, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export const CURATED_AVATARS = [
@@ -222,7 +223,15 @@ export const AuthPage: React.FC = () => {
       const invitedGame = new URLSearchParams(window.location.search).get('match');
       const redirectUrl = invitedGame ? tournamentLink(invitedGame) : window.location.origin;
 
-      // 1. Supabase Auth Sign Up (Triggers real confirmation email dispatch)
+      // 1. Determine initial avatar URL (compress file if custom photo chosen)
+      let initialAvatarUrl = customPhotoPreview || selectedAvatarUrl;
+      if (customPhotoFile) {
+        try {
+          initialAvatarUrl = await compressImageFile(customPhotoFile, 250, 0.8);
+        } catch (e) {}
+      }
+
+      // 2. Supabase Auth Sign Up (Triggers real confirmation email dispatch with avatar_url in user_metadata)
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -233,7 +242,8 @@ export const AuthPage: React.FC = () => {
             ministry: selectedMinistry,
             agency: selectedAgency,
             department: department || 'Administration',
-            cadre: selectedCadre
+            cadre: selectedCadre,
+            avatar_url: initialAvatarUrl
           }
         }
       });
@@ -251,8 +261,8 @@ export const AuthPage: React.FC = () => {
         return;
       }
 
-      // 2. Upload Custom Profile Photo to Supabase Storage if file selected
-      let finalAvatarUrl = customPhotoPreview || selectedAvatarUrl;
+      // 3. Upload Custom Profile Photo to Supabase Storage if file selected
+      let finalAvatarUrl = initialAvatarUrl;
       if (customPhotoFile) {
         const uploadedUrl = await cloudDatabaseService.uploadProfilePhoto(user.id, customPhotoFile);
         if (uploadedUrl) {
@@ -260,7 +270,12 @@ export const AuthPage: React.FC = () => {
         }
       }
 
-      // 3. Save Profile record in public.profiles table
+      // Cache avatar locally immediately
+      try {
+        localStorage.setItem(`user_avatar_${user.id}`, finalAvatarUrl);
+      } catch (e) {}
+
+      // 4. Save Profile record in public.profiles table
       const fullOrgName = selectedAgency && selectedAgency !== `${selectedMinistry} Headquarters` 
         ? selectedAgency 
         : selectedMinistry;
@@ -275,6 +290,13 @@ export const AuthPage: React.FC = () => {
         cadre: selectedCadre,
         avatar_url: finalAvatarUrl
       });
+
+      // Update auth metadata with final avatar URL if storage upload produced a new URL
+      if (finalAvatarUrl !== initialAvatarUrl) {
+        await supabase.auth.updateUser({
+          data: { avatar_url: finalAvatarUrl }
+        });
+      }
 
       // If Supabase auto-confirmed or session is present, log in immediately
       if (data.session) {
