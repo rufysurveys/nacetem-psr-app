@@ -207,25 +207,36 @@ export const cloudDatabaseService = {
   // --- STORAGE (PROFILE PHOTOS) ---
   async uploadProfilePhoto(userId: string, file: File): Promise<string | null> {
     try {
-      const fileExt = file.name.split('.').pop();
+      const fileExt = file.name.split('.').pop() || 'png';
       const filePath = `avatars/${ensureValidUUID(userId)}_${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from('profile-photos')
         .upload(filePath, file, { upsert: true });
 
-      if (uploadError) {
-        console.warn('Storage upload notice:', uploadError.message);
-        return null;
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage
+          .from('profile-photos')
+          .getPublicUrl(filePath);
+
+        if (publicUrlData?.publicUrl) {
+          return publicUrlData.publicUrl;
+        }
+      } else {
+        console.warn('Storage bucket upload notice:', uploadError.message);
       }
-
-      const { data: publicUrlData } = supabase.storage
-        .from('profile-photos')
-        .getPublicUrl(filePath);
-
-      return publicUrlData.publicUrl;
     } catch (e) {
       console.warn('Upload exception:', e);
+    }
+
+    // Fallback: Convert file to Data URL so photo upload always succeeds and persists
+    try {
+      return await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+    } catch (e) {
       return null;
     }
   },

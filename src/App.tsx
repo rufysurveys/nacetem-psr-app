@@ -63,7 +63,8 @@ export const App: React.FC = () => {
         const mda = profile?.agency || profile?.ministry || meta.agency || meta.ministry || 'Federal Civil Service';
         const cadre = profile?.cadre || meta.cadre || 'Senior Executive Officer (GL 10)';
         const dept = profile?.department || meta.department || 'Administration';
-        const avatar = profile?.avatar_url || meta.avatar_url || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200';
+        const cachedAvatar = localStorage.getItem(`user_avatar_${u.id}`);
+        const avatar = profile?.avatar_url || cachedAvatar || meta.avatar_url || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200';
 
         loginWithDomain(email, name, mda, cadre, dept, avatar, u.id);
       } catch (err) {

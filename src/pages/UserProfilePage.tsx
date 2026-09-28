@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { CadreRank } from '../types';
+import { cloudDatabaseService, supabase } from '../services/supabase';
 import { ShieldCheck, Award, Building2, CheckCircle2, Clock, Upload, Camera, LogOut, Edit2, Save, X, RefreshCw } from 'lucide-react';
 
 export const UserProfilePage: React.FC = () => {
   const { user, userAttempts, updateUserProfile, logout } = useStore();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
 
   const handleSignOut = async () => {
     setIsSigningOut(true);
@@ -34,30 +38,106 @@ export const UserProfilePage: React.FC = () => {
     'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=200'
   ];
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        if (typeof reader.result === 'string') {
-          setAvatar(reader.result);
-          updateUserProfile({ avatar: reader.result });
-        }
-      };
-      reader.readAsDataURL(file);
+    if (!file || !user) return;
+
+    setIsUploadingPhoto(true);
+    setUploadNotice(null);
+
+    try {
+      // 1. Immediate local Data URL preview
+      const dataUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+
+      setAvatar(dataUrl);
+
+      // 2. Upload file to Supabase Storage bucket / fallback Data URL
+      const uploadedUrl = await cloudDatabaseService.uploadProfilePhoto(user.id, file);
+      const finalAvatarUrl = uploadedUrl || dataUrl;
+
+      // 3. Save to Zustand & local cache
+      updateUserProfile({ avatar: finalAvatarUrl });
+      try {
+        localStorage.setItem(`user_avatar_${user.id}`, finalAvatarUrl);
+      } catch (err) {}
+
+      // 4. Persist in central Supabase database
+      await cloudDatabaseService.upsertProfile({
+        user_id: user.id,
+        full_name: user.name,
+        email: user.email,
+        ministry: user.mdaName,
+        agency: user.mdaName,
+        department: user.department,
+        cadre: user.cadre,
+        avatar_url: finalAvatarUrl
+      });
+
+      // 5. Sync metadata in Supabase Auth session
+      await supabase.auth.updateUser({
+        data: { avatar_url: finalAvatarUrl }
+      });
+
+      setUploadNotice('Profile picture uploaded & saved to database!');
+      setTimeout(() => setUploadNotice(null), 4000);
+    } catch (err: any) {
+      console.error('Failed to upload picture:', err);
+      setUploadNotice('Failed to upload picture. Please try again.');
+    } finally {
+      setIsUploadingPhoto(false);
     }
   };
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateUserProfile({
-      name,
-      mdaName,
-      department,
-      cadre,
-      avatar
-    });
-    setIsEditing(false);
+    if (!user) return;
+
+    setIsSavingProfile(true);
+
+    try {
+      updateUserProfile({
+        name,
+        mdaName,
+        department,
+        cadre,
+        avatar
+      });
+
+      try {
+        localStorage.setItem(`user_avatar_${user.id}`, avatar);
+      } catch (err) {}
+
+      await cloudDatabaseService.upsertProfile({
+        user_id: user.id,
+        full_name: name,
+        email: user.email,
+        ministry: mdaName,
+        agency: mdaName,
+        department,
+        cadre,
+        avatar_url: avatar
+      });
+
+      await supabase.auth.updateUser({
+        data: {
+          full_name: name,
+          agency: mdaName,
+          department,
+          cadre,
+          avatar_url: avatar
+        }
+      });
+
+      setIsEditing(false);
+    } catch (err: any) {
+      console.error('Failed to save profile:', err);
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   return (
@@ -76,10 +156,16 @@ export const UserProfilePage: React.FC = () => {
                 alt={name}
                 className="w-24 h-24 rounded-full object-cover ring-4 ring-emerald-500/40 shadow-lg"
               />
-              <label className="absolute bottom-0 right-0 p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full cursor-pointer shadow-md transition-transform hover:scale-110">
-                <Camera className="w-4 h-4" />
-                <input type="file" accept="image/*" className="hidden" onChange={handleFileUpload} />
-              </label>
+              {isUploadingPhoto ? (
+                <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center text-white">
+                  <RefreshCw className="w-6 h-6 animate-spin" />
+                </div>
+              ) : (
+                <label className="absolute bottom-0 right-0 p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full cursor-pointer shadow-md transition-transform hover:scale-110" title="Upload new photo">
+                  <Camera className="w-4 h-4" />
+                  <input type="file" accept="image/*" disabled={isUploadingPhoto} className="hidden" onChange={handleFileUpload} />
+                </label>
+              )}
             </div>
 
             <div className="space-y-1">
@@ -96,6 +182,12 @@ export const UserProfilePage: React.FC = () => {
                 <Building2 className="w-3.5 h-3.5 text-slate-400" />
                 <span><strong>{user.mdaName}</strong> ({user.department} Dept)</span>
               </p>
+              {uploadNotice && (
+                <div className="mt-2 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>{uploadNotice}</span>
+                </div>
+              )}
             </div>
 
           </div>
@@ -219,10 +311,20 @@ export const UserProfilePage: React.FC = () => {
               </button>
               <button
                 type="submit"
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2 rounded-xl text-xs shadow flex items-center gap-1.5"
+                disabled={isSavingProfile}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2 rounded-xl text-xs shadow flex items-center gap-1.5 disabled:opacity-50"
               >
-                <Save className="w-3.5 h-3.5" />
-                <span>Save Profile Changes</span>
+                {isSavingProfile ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving Profile...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-3.5 h-3.5" />
+                    <span>Save Profile Changes</span>
+                  </>
+                )}
               </button>
             </div>
           </form>
