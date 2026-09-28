@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { compressImageFile } from '../utils/imageCompressor';
 
 // Both deployment and local development must explicitly use the same backend.
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -207,7 +208,7 @@ export const cloudDatabaseService = {
   // --- STORAGE (PROFILE PHOTOS) ---
   async uploadProfilePhoto(userId: string, file: File): Promise<string | null> {
     try {
-      const fileExt = file.name.split('.').pop() || 'png';
+      const fileExt = file.name.split('.').pop() || 'jpg';
       const filePath = `avatars/${ensureValidUUID(userId)}_${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
@@ -229,13 +230,9 @@ export const cloudDatabaseService = {
       console.warn('Upload exception:', e);
     }
 
-    // Fallback: Convert file to Data URL so photo upload always succeeds and persists
+    // Fallback: Compress file to tiny canvas Data URL so photo upload always succeeds and persists
     try {
-      return await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
-      });
+      return await compressImageFile(file, 250, 0.8);
     } catch (e) {
       return null;
     }

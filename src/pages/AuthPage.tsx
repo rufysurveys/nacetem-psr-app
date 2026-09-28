@@ -349,11 +349,12 @@ export const AuthPage: React.FC = () => {
         let profile = await cloudDatabaseService.fetchProfileByUserId(user.id);
 
         const meta = user.user_metadata || {};
+        const cachedLocalAvatar = localStorage.getItem(`user_avatar_${user.id}`);
         const finalName = profile?.full_name || meta.full_name || user.email?.split('@')[0] || 'Civil Servant';
         const finalMda = profile?.agency || profile?.ministry || meta.agency || meta.ministry || 'Federal Civil Service';
         const finalCadre = (profile?.cadre || meta.cadre as CadreRank) || 'Senior Executive Officer (GL 10)';
         const finalDept = profile?.department || meta.department || 'Administration';
-        const finalAvatar = profile?.avatar_url || meta.avatar_url || CURATED_AVATARS[0].url;
+        const finalAvatar = profile?.avatar_url || cachedLocalAvatar || meta.avatar_url || CURATED_AVATARS[0].url;
 
         // Ensure profile exists in DB now that user is authenticated
         if (!profile) {

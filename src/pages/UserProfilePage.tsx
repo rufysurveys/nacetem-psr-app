@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { CadreRank } from '../types';
 import { cloudDatabaseService, supabase } from '../services/supabase';
+import { compressImageFile } from '../utils/imageCompressor';
 import { ShieldCheck, Award, Building2, CheckCircle2, Clock, Upload, Camera, LogOut, Edit2, Save, X, RefreshCw } from 'lucide-react';
 
 export const UserProfilePage: React.FC = () => {
@@ -46,18 +47,15 @@ export const UserProfilePage: React.FC = () => {
     setUploadNotice(null);
 
     try {
-      // 1. Immediate local Data URL preview
-      const dataUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
-      });
+      // 1. Compress file to lightweight thumbnail (~20KB)
+      const compressedDataUrl = await compressImageFile(file, 250, 0.8);
+      setAvatar(compressedDataUrl);
 
-      setAvatar(dataUrl);
-
-      // 2. Upload file to Supabase Storage bucket / fallback Data URL
+      // 2. Upload file to Supabase Storage bucket or compressed fallback
       const uploadedUrl = await cloudDatabaseService.uploadProfilePhoto(user.id, file);
-      const finalAvatarUrl = uploadedUrl || dataUrl;
+      const finalAvatarUrl = uploadedUrl || compressedDataUrl;
+
+      setAvatar(finalAvatarUrl);
 
       // 3. Save to Zustand & local cache
       updateUserProfile({ avatar: finalAvatarUrl });
@@ -82,8 +80,8 @@ export const UserProfilePage: React.FC = () => {
         data: { avatar_url: finalAvatarUrl }
       });
 
-      setUploadNotice('Profile picture uploaded & saved to database!');
-      setTimeout(() => setUploadNotice(null), 4000);
+      setUploadNotice('✓ Profile photo permanently saved to your account database!');
+      setTimeout(() => setUploadNotice(null), 5000);
     } catch (err: any) {
       console.error('Failed to upload picture:', err);
       setUploadNotice('Failed to upload picture. Please try again.');
