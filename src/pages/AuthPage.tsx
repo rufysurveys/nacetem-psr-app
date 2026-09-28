@@ -18,8 +18,8 @@ export const CURATED_AVATARS = [
 export const AuthPage: React.FC = () => {
   const { loginWithDomain, setCompetitionMode } = useStore();
 
-  // Auth Tab: 'signup' vs 'signin'
-  const [authTab, setAuthTab] = useState<'signup' | 'signin'>('signup');
+  // Auth Tab: 'signup' | 'signin' | 'forgot_password' | 'reset_password'
+  const [authTab, setAuthTab] = useState<'signup' | 'signin' | 'forgot_password' | 'reset_password'>('signup');
 
   // Multi-step Registration State: 'form' | 'verification_pending' | 'verified_success'
   const [regStep, setRegStep] = useState<'form' | 'verification_pending' | 'verified_success'>('form');
@@ -61,6 +61,15 @@ export const AuthPage: React.FC = () => {
   const [showSignInPassword, setShowSignInPassword] = useState(false);
   const [signInError, setSignInError] = useState<string | null>(null);
 
+  // --- FORGOT & RESET PASSWORD STATE ---
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   // --- EMAIL VERIFICATION STATE ---
   const [isResending, setIsResending] = useState(false);
   const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
@@ -90,12 +99,15 @@ export const AuthPage: React.FC = () => {
     }
   };
 
-  // Listen for Email Confirmation Link Redirects (#access_token=... & type=signup)
+  // Listen for Email Confirmation & Password Reset Link Redirects
   useEffect(() => {
     const hash = window.location.hash;
-    if (hash.includes('access_token') || hash.includes('type=signup') || hash.includes('type=recovery')) {
+    const search = window.location.search;
+
+    if (hash.includes('type=recovery') || search.includes('type=recovery')) {
+      setAuthTab('reset_password');
+    } else if (hash.includes('access_token') || hash.includes('type=signup')) {
       setRegStep('verified_success');
-      // Attempt session fetch
       supabase.auth.getSession().then(({ data }) => {
         if (data.session?.user) {
           const u = data.session.user;
@@ -112,7 +124,88 @@ export const AuthPage: React.FC = () => {
         }
       });
     }
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setAuthTab('reset_password');
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
   }, [loginWithDomain]);
+
+  // SUPABASE DISPATCH PASSWORD RESET LINK
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError(null);
+    setResetMessage(null);
+
+    if (!resetEmail) {
+      setResetError('Please enter your official email address.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const redirectUrl = `${window.location.origin}#type=recovery`;
+      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+        redirectTo: redirectUrl
+      });
+
+      if (error) {
+        setResetError(error.message);
+      } else {
+        setResetMessage(`Password reset instructions have been dispatched to ${resetEmail}. Please check your email inbox.`);
+      }
+    } catch (err: any) {
+      setResetError(err.message || 'Failed to dispatch password reset link.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // SUPABASE UPDATE USER PASSWORD
+  const handleUpdatePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError(null);
+    setResetMessage(null);
+
+    if (!newPassword || newPassword.length < 6) {
+      setResetError('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setResetError('Passwords do not match.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+      if (error) {
+        setResetError(error.message);
+      } else {
+        setResetMessage('Your password has been successfully updated! Redirecting to sign in...');
+        setTimeout(() => {
+          setAuthTab('signin');
+          setResetMessage(null);
+          setResetError(null);
+          setNewPassword('');
+          setConfirmNewPassword('');
+        }, 2000);
+      }
+    } catch (err: any) {
+      setResetError(err.message || 'Failed to update password.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   // REAL SUPABASE SIGN UP SUBMIT
   const handleSignUpSubmit = async (e: React.FormEvent) => {
@@ -732,7 +825,21 @@ export const AuthPage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Password</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">Password</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthTab('forgot_password');
+                      setResetEmail(signInEmail);
+                      setResetError(null);
+                      setResetMessage(null);
+                    }}
+                    className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 transition-colors"
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
                 <div className="relative">
                   <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
                   <input
@@ -771,6 +878,179 @@ export const AuthPage: React.FC = () => {
                   <>
                     <LogIn className="w-4 h-4" />
                     <span>Sign In to Platform</span>
+                  </>
+                )}
+              </button>
+            </form>
+          )}
+
+          {/* ========================================================================= */}
+          {/* FORGOT PASSWORD FLOW */}
+          {/* ========================================================================= */}
+          {authTab === 'forgot_password' && (
+            <form onSubmit={handleResetPasswordSubmit} className="space-y-4 animate-fadeIn">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Password Reset Assistance</h2>
+                <p className="text-xs text-slate-500 mt-1">Enter your registered official email address to receive password reset instructions.</p>
+              </div>
+
+              {resetError && (
+                <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold p-3 rounded-xl flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{resetError}</span>
+                </div>
+              )}
+
+              {resetMessage && (
+                <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold p-3.5 rounded-xl flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                  <span>{resetMessage}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Registered Official Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                  <input
+                    type="email"
+                    required
+                    value={resetEmail}
+                    onChange={(e) => {
+                      setResetEmail(e.target.value);
+                      if (resetError) setResetError(null);
+                    }}
+                    placeholder="officer@agency.gov.ng"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-4 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
+              >
+                {isSubmitting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Dispatching reset email...</span>
+                  </>
+                ) : (
+                  <>
+                    <Mail className="w-4 h-4" />
+                    <span>Send Password Reset Instructions</span>
+                  </>
+                )}
+              </button>
+
+              <div className="pt-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthTab('signin');
+                    setResetError(null);
+                    setResetMessage(null);
+                  }}
+                  className="text-xs font-bold text-slate-600 hover:text-slate-900 transition-colors"
+                >
+                  ← Return to Sign In
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* ========================================================================= */}
+          {/* RESET NEW PASSWORD FLOW (VIA EMAIL LINK) */}
+          {/* ========================================================================= */}
+          {authTab === 'reset_password' && (
+            <form onSubmit={handleUpdatePasswordSubmit} className="space-y-4 animate-fadeIn">
+              <div>
+                <span className="px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold border border-emerald-300 inline-block mb-2">
+                  🔒 VERIFIED SECURITY RECOVERY LINK
+                </span>
+                <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Create New Password</h2>
+                <p className="text-xs text-slate-500 mt-1">Please specify a new password for your civil servant account.</p>
+              </div>
+
+              {resetError && (
+                <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold p-3 rounded-xl flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{resetError}</span>
+                </div>
+              )}
+
+              {resetMessage && (
+                <div className="bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-bold p-3.5 rounded-xl flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                  <span>{resetMessage}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">New Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                  <input
+                    type={showNewPassword ? "text" : "password"}
+                    required
+                    value={newPassword}
+                    onChange={(e) => {
+                      setNewPassword(e.target.value);
+                      if (resetError) setResetError(null);
+                    }}
+                    placeholder="At least 6 characters"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-10 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Confirm New Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    required
+                    value={confirmNewPassword}
+                    onChange={(e) => {
+                      setConfirmNewPassword(e.target.value);
+                      if (resetError) setResetError(null);
+                    }}
+                    placeholder="Repeat new password"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-10 py-2.5 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mt-2 disabled:opacity-50"
+              >
+                {isSubmitting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Updating password...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Save New Password &amp; Sign In</span>
                   </>
                 )}
               </button>
