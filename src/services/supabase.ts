@@ -36,6 +36,9 @@ export interface ProfileRecord {
 
 export interface GameRecord {
   is_proctored?: boolean;
+  audience_type?: 'all' | 'agency' | 'department' | 'person';
+  audience_value?: string | null;
+  audience_agency?: string | null;
   id: string;
   host_id: string | null;
   title: string;
@@ -264,7 +267,11 @@ export const cloudDatabaseService = {
     return (data || []) as GameRecord[];
   },
 
-  async createGame(game: Omit<GameRecord, 'id' | 'created_at'>): Promise<GameRecord> {
+  async createGame(game: Omit<GameRecord, 'id' | 'created_at'> & {
+    audience_type?: 'all' | 'agency' | 'department' | 'person';
+    audience_value?: string | null;
+    audience_agency?: string | null;
+  }): Promise<GameRecord> {
     const { data: authData } = await supabase.auth.getSession();
     if (!authData.session || authData.session.user.id !== game.host_id) {
       throw new Error('Sign in with your own account to schedule remote contests. Demo mode cannot compete.');
@@ -272,7 +279,9 @@ export const cloudDatabaseService = {
     const { data, error } = await supabase.rpc('schedule_contest', {
       p_title: game.title, p_mode: game.competition_mode, p_target_org: game.target_org,
       p_start: game.start_datetime, p_cutoff: game.cutoff_datetime,
-      p_max_players: game.max_players, p_description: game.description || '', p_proctored: game.is_proctored || false
+      p_max_players: game.max_players, p_description: game.description || '', p_proctored: game.is_proctored || false,
+      p_audience_type: game.audience_type || 'all', p_audience_value: game.audience_value || null,
+      p_audience_agency: game.audience_agency || null
     });
     if (error) throw new Error(error.code === 'PGRST202'
       ? 'The shared contest database needs migration 004_remote_contests.sql before scheduling.' : error.message);

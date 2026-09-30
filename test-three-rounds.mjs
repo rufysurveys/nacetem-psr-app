@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 const db=new PGlite();
 await db.exec(`CREATE ROLE anon;CREATE ROLE authenticated;CREATE SCHEMA auth;CREATE SCHEMA storage;CREATE TABLE auth.users(id uuid PRIMARY KEY,email text,raw_user_meta_data jsonb DEFAULT '{}');CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql AS $$ SELECT nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;CREATE TABLE storage.buckets(id text PRIMARY KEY,name text,public boolean);CREATE TABLE storage.objects(id uuid,bucket_id text);CREATE PUBLICATION supabase_realtime;`);
-for(const f of ['001_initial_schema.sql','002_fix_rls_and_seed.sql','003_allow_hostless_games.sql','004_remote_contests.sql','005_host_and_admin.sql','006_three_round_engine.sql','007_proctored_contests.sql','008_contest_content_admin.sql']){
+for(const f of ['001_initial_schema.sql','002_fix_rls_and_seed.sql','003_allow_hostless_games.sql','004_remote_contests.sql','005_host_and_admin.sql','006_three_round_engine.sql','007_proctored_contests.sql','008_contest_content_admin.sql','010_tournament_audiences.sql']){
  const {readdirSync}=await import('node:fs');const name=readdirSync('supabase/migrations').find(n=>n.startsWith(f.slice(0,4)));
+ if(f==='010_tournament_audiences.sql')await db.exec('DROP FUNCTION public.schedule_contest(text,text,text,timestamptz,timestamptz,integer,text,boolean)');
  await db.exec(readFileSync('supabase/migrations/'+name,'utf8').replace('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";',''));
 }
 await db.exec(readFileSync('supabase/seed_remote_questions.sql','utf8'));await db.exec(readFileSync('supabase/seed_three_rounds.sql','utf8'));
@@ -60,4 +61,18 @@ await ping();await val('SELECT submit_player_answer($1,$2,0,0)',[pg,pq]);
 await as(2);await fail('SELECT proctor_heartbeat($1,true,false,NULL,NULL)',[pg],/Join an open/);
 await db.exec('SET ROLE authenticated');await fail('SELECT * FROM proctor_sessions',[],/permission denied/);await fail('SELECT contest_v2_score($1,$2,$3,0,0)',[pg,pq,ids[2]],/permission denied/);await db.exec('RESET ROLE');
 await as(0);await val('SELECT proctor_stop($1)',[pg]);assert.equal(await val('SELECT count(*)::int FROM proctor_sessions WHERE game_id=$1 AND user_id=$2',[pg,ids[0]]),0);
-console.log('PASS: three rounds, early host start, shared wheel/timers, source privacy, lifelines, wagers, lives, timeouts, finalization, proctor readiness and reviewer privacy.');await db.close();
+await db.query("UPDATE profiles SET agency='Agency A',ministry='Agency A',department='Dept A' WHERE user_id=$1",[ids[0]]);
+await db.query("UPDATE profiles SET agency='Agency A',ministry='Agency A',department='Dept A' WHERE user_id=$1",[ids[1]]);
+await db.query("UPDATE profiles SET agency='Agency B',ministry='Agency B',department='Dept B' WHERE user_id=$1",[ids[2]]);
+const scoped=await val("SELECT (schedule_contest('Scoped department','intra_dept','Agency A',now()+interval '1 hour',now()+interval '1 hour',20,'',false,'department','Dept A','Agency A')).id");
+await as(1);await val('SELECT join_remote_game($1)',[scoped]);
+await as(2);await fail('SELECT join_remote_game($1)',[scoped],/restricted to its selected audience/);
+await db.exec('SET ROLE authenticated');
+assert.equal(await val('SELECT count(*)::int FROM games WHERE id=$1',[scoped]),0,'other departments cannot discover scoped tournaments');
+await db.exec('RESET ROLE');
+await as(1);assert.equal(await val('SELECT count(*)::int FROM games WHERE id=$1',[scoped]),1,'matching department can discover scoped tournaments');
+await as(0);await fail("SELECT schedule_contest('Outside scope','intra_dept','Agency B',now()+interval '1 hour',now()+interval '1 hour',20,'',false,'agency','Agency B',null)",[],/Only administrators can schedule for another organization/);
+await db.query("INSERT INTO app_access(user_id,role) VALUES($1,'admin') ON CONFLICT(user_id) DO UPDATE SET role='admin'",[ids[0]]);
+const adminScoped=await val("SELECT (schedule_contest('Admin organization','inter_agency','Agency B',now()+interval '1 hour',now()+interval '1 hour',20,'',false,'agency','Agency B',null)).id");
+await as(2);await val('SELECT join_remote_game($1)',[adminScoped]);
+console.log('PASS: three rounds, early host start, shared wheel/timers, source privacy, lifelines, wagers, lives, timeouts, finalization, proctor readiness/reviewer privacy, and database-enforced audience discovery/join rules.');await db.close();

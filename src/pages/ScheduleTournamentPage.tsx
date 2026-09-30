@@ -14,6 +14,10 @@ export const ScheduleTournamentPage: React.FC = () => {
   const [joinError, setJoinError] = useState('');
   const [joiningId, setJoiningId] = useState<string | null>(null);
   const [maxPlayers, setMaxPlayers] = useState(200);
+  const [audienceType, setAudienceType] = useState<'all' | 'agency' | 'department' | 'person'>('all');
+  const [audienceValue, setAudienceValue] = useState(user?.mdaName || '');
+  const [audienceAgency, setAudienceAgency] = useState(user?.mdaName || '');
+  const [audienceDepartment, setAudienceDepartment] = useState(user?.department || '');
   const invitationAttempted = useRef(false);
   const localDate = (date: Date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
@@ -50,7 +54,10 @@ export const ScheduleTournamentPage: React.FC = () => {
         cutoff_datetime: new Date(cutoffDateTime).toISOString(),
         max_players: maxPlayers,
         status: 'scheduled',
-        description
+        description,
+        audience_type: audienceType,
+        audience_value: audienceType === 'department' ? audienceDepartment : audienceValue,
+        audience_agency: audienceType === 'department' ? audienceAgency : null
       });
 
       // Re-query database to show new game across store
@@ -222,6 +229,29 @@ export const ScheduleTournamentPage: React.FC = () => {
                 </div>
               </div>
 
+              <fieldset className="space-y-3 rounded-xl border border-slate-200 p-4">
+                <legend className="px-1 font-bold text-slate-700">Who can see and join this tournament?</legend>
+                <select
+                  value={audienceType}
+                  onChange={e => {
+                    const nextAudience = e.target.value as typeof audienceType;
+                    setAudienceType(nextAudience);
+                    if (nextAudience === 'person') setAudienceValue(user?.email || '');
+                    if (nextAudience === 'agency') setAudienceValue(user?.mdaName || '');
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium"
+                >
+                  <option value="all">Everyone</option>
+                  <option value="agency">One organization</option>
+                  <option value="department">One department</option>
+                  <option value="person">One person</option>
+                </select>
+                {audienceType === 'agency' && <input required readOnly={user?.role !== 'admin'} aria-label="Organization allowed to join" placeholder="Organization name" value={audienceValue} onChange={e => setAudienceValue(e.target.value)} className="w-full border rounded-xl px-3 py-2 read-only:bg-slate-100" />}
+                {audienceType === 'department' && <div className="grid gap-3 sm:grid-cols-2"><input required readOnly={user?.role !== 'admin'} aria-label="Organization allowed to join" placeholder="Organization name" value={audienceAgency} onChange={e => setAudienceAgency(e.target.value)} className="w-full border rounded-xl px-3 py-2 read-only:bg-slate-100" /><input required readOnly={user?.role !== 'admin'} aria-label="Department allowed to join" placeholder="Department name" value={audienceDepartment} onChange={e => setAudienceDepartment(e.target.value)} className="w-full border rounded-xl px-3 py-2 read-only:bg-slate-100" /></div>}
+                {audienceType === 'person' && <input required readOnly={user?.role !== 'admin'} type="email" aria-label="Person allowed to join" placeholder="Registered user's email" value={audienceValue} onChange={e => setAudienceValue(e.target.value)} className="w-full border rounded-xl px-3 py-2 read-only:bg-slate-100" />}
+                <p className="text-[11px] text-slate-500">{user?.role === 'admin' ? 'Administrator scheduling can target any organization, department, or registered person.' : 'You can schedule for everyone or limit participation to your own organization, department, or account.'}</p>
+              </fieldset>
+
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Tournament Description</label>
                 <textarea
@@ -319,6 +349,7 @@ export const ScheduleTournamentPage: React.FC = () => {
                   </div>
 
                   <p className="text-xs font-bold text-emerald-700">{g.is_proctored ? 'Proctored tournament · Camera and screen required' : 'Standard tournament · No proctoring'}</p>
+                  <p className="text-xs font-semibold text-slate-600">Audience: {g.audience_type === 'agency' ? g.audience_value : g.audience_type === 'department' ? `${g.audience_value}, ${g.audience_agency}` : g.audience_type === 'person' ? 'Invited person' : 'Everyone'}</p>
                   <p className="text-xs text-slate-600 leading-relaxed">{g.description || 'Public Service Rules Competition'}</p>
 
                   <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-1.5 text-xs">
