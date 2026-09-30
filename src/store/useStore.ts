@@ -164,13 +164,6 @@ export const useStore = create<AppState>((set, get) => ({
     const currentUser = get().user;
     if (!currentUser) return;
     const updatedUser = { ...currentUser, ...updates };
-    if (updates.avatar) {
-      try {
-        localStorage.setItem(`user_avatar_${currentUser.id}`, updates.avatar);
-      } catch (e) {
-        console.warn('Could not cache avatar locally:', e);
-      }
-    }
     set({ user: updatedUser });
   },
 

@@ -264,32 +264,32 @@ export const AuthPage: React.FC = () => {
       // 3. Upload Custom Profile Photo to Supabase Storage if file selected
       let finalAvatarUrl = initialAvatarUrl;
       if (customPhotoFile) {
-        const uploadedUrl = await cloudDatabaseService.uploadProfilePhoto(user.id, customPhotoFile);
-        if (uploadedUrl) {
-          finalAvatarUrl = uploadedUrl;
+        try {
+          finalAvatarUrl = await cloudDatabaseService.uploadProfilePhoto(user.id, customPhotoFile);
+        } catch (uploadError) {
+          console.info('Profile photo will be saved after email confirmation:', uploadError);
         }
       }
-
-      // Cache avatar locally immediately
-      try {
-        localStorage.setItem(`user_avatar_${user.id}`, finalAvatarUrl);
-      } catch (e) {}
 
       // 4. Save Profile record in public.profiles table
       const fullOrgName = selectedAgency && selectedAgency !== `${selectedMinistry} Headquarters` 
         ? selectedAgency 
         : selectedMinistry;
 
-      await cloudDatabaseService.upsertProfile({
-        user_id: user.id,
-        full_name: name,
-        email,
-        ministry: selectedMinistry,
-        agency: fullOrgName,
-        department: department || 'Administration',
-        cadre: selectedCadre,
-        avatar_url: finalAvatarUrl
-      });
+      try {
+        await cloudDatabaseService.upsertProfile({
+          user_id: user.id,
+          full_name: name,
+          email,
+          ministry: selectedMinistry,
+          agency: fullOrgName,
+          department: department || 'Administration',
+          cadre: selectedCadre,
+          avatar_url: finalAvatarUrl
+        });
+      } catch (profileError) {
+        console.info('Profile will be synchronized after email confirmation:', profileError);
+      }
 
       // Update auth metadata with final avatar URL if storage upload produced a new URL
       if (finalAvatarUrl !== initialAvatarUrl) {
@@ -371,25 +371,28 @@ export const AuthPage: React.FC = () => {
         let profile = await cloudDatabaseService.fetchProfileByUserId(user.id);
 
         const meta = user.user_metadata || {};
-        const cachedLocalAvatar = localStorage.getItem(`user_avatar_${user.id}`);
         const finalName = profile?.full_name || meta.full_name || user.email?.split('@')[0] || 'Civil Servant';
         const finalMda = profile?.agency || profile?.ministry || meta.agency || meta.ministry || 'Federal Civil Service';
         const finalCadre = (profile?.cadre || meta.cadre as CadreRank) || 'Senior Executive Officer (GL 10)';
         const finalDept = profile?.department || meta.department || 'Administration';
-        const finalAvatar = profile?.avatar_url || cachedLocalAvatar || meta.avatar_url || CURATED_AVATARS[0].url;
+        const finalAvatar = profile?.avatar_url || meta.avatar_url || CURATED_AVATARS[0].url;
 
         // Ensure profile exists in DB now that user is authenticated
         if (!profile) {
-          await cloudDatabaseService.upsertProfile({
-            user_id: user.id,
-            full_name: finalName,
-            email: user.email || signInEmail,
-            ministry: meta.ministry || finalMda,
-            agency: finalMda,
-            department: finalDept,
-            cadre: finalCadre,
-            avatar_url: finalAvatar
-          });
+          try {
+            await cloudDatabaseService.upsertProfile({
+              user_id: user.id,
+              full_name: finalName,
+              email: user.email || signInEmail,
+              ministry: meta.ministry || finalMda,
+              agency: finalMda,
+              department: finalDept,
+              cadre: finalCadre,
+              avatar_url: finalAvatar
+            });
+          } catch (profileError) {
+            console.warn('Could not create profile after sign-in:', profileError);
+          }
         }
 
         setCompetitionMode('intra_dept');

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { CadreRank } from '../types';
 import { cloudDatabaseService, supabase } from '../services/supabase';
-import { compressImageFile } from '../utils/imageCompressor';
 import { ShieldCheck, Award, Building2, CheckCircle2, Clock, Upload, Camera, LogOut, Edit2, Save, X, RefreshCw } from 'lucide-react';
 
 export const UserProfilePage: React.FC = () => {
@@ -53,23 +52,8 @@ export const UserProfilePage: React.FC = () => {
     setUploadNotice(null);
 
     try {
-      // 1. Compress file to lightweight thumbnail (~20KB)
-      const compressedDataUrl = await compressImageFile(file, 250, 0.8);
-      setAvatar(compressedDataUrl);
-
-      // 2. Upload file to Supabase Storage bucket or compressed fallback
+      // Upload to durable storage before switching the visible profile photo.
       const uploadedUrl = await cloudDatabaseService.uploadProfilePhoto(user.id, file);
-      const finalAvatarUrl = uploadedUrl || compressedDataUrl;
-
-      setAvatar(finalAvatarUrl);
-
-      // 3. Save to Zustand & local cache
-      updateUserProfile({ avatar: finalAvatarUrl });
-      try {
-        localStorage.setItem(`user_avatar_${user.id}`, finalAvatarUrl);
-      } catch (err) {}
-
-      // 4. Persist in central Supabase database
       await cloudDatabaseService.upsertProfile({
         user_id: user.id,
         full_name: user.name,
@@ -78,19 +62,19 @@ export const UserProfilePage: React.FC = () => {
         agency: user.mdaName,
         department: user.department,
         cadre: user.cadre,
-        avatar_url: finalAvatarUrl
+        avatar_url: uploadedUrl
       });
-
-      // 5. Sync metadata in Supabase Auth session
       await supabase.auth.updateUser({
-        data: { avatar_url: finalAvatarUrl }
+        data: { avatar_url: uploadedUrl }
       });
 
+      setAvatar(uploadedUrl);
+      updateUserProfile({ avatar: uploadedUrl });
       setUploadNotice('✓ Profile photo permanently saved to your account database!');
       setTimeout(() => setUploadNotice(null), 5000);
     } catch (err: any) {
       console.error('Failed to upload picture:', err);
-      setUploadNotice('Failed to upload picture. Please try again.');
+      setUploadNotice(err.message || 'Failed to upload picture. Please try again.');
     } finally {
       setIsUploadingPhoto(false);
     }
@@ -103,17 +87,7 @@ export const UserProfilePage: React.FC = () => {
     setIsSavingProfile(true);
 
     try {
-      updateUserProfile({
-        name,
-        mdaName,
-        department,
-        cadre,
-        avatar
-      });
-
-      try {
-        localStorage.setItem(`user_avatar_${user.id}`, avatar);
-      } catch (err) {}
+      const finalAvatar = await cloudDatabaseService.persistProfilePhoto(user.id, avatar);
 
       await cloudDatabaseService.upsertProfile({
         user_id: user.id,
@@ -123,7 +97,7 @@ export const UserProfilePage: React.FC = () => {
         agency: mdaName,
         department,
         cadre,
-        avatar_url: avatar
+        avatar_url: finalAvatar
       });
 
       await supabase.auth.updateUser({
@@ -132,13 +106,17 @@ export const UserProfilePage: React.FC = () => {
           agency: mdaName,
           department,
           cadre,
-          avatar_url: avatar
+          avatar_url: finalAvatar
         }
       });
 
+      setAvatar(finalAvatar);
+      updateUserProfile({ name, mdaName, department, cadre, avatar: finalAvatar });
+      setUploadNotice('Profile changes saved.');
       setIsEditing(false);
     } catch (err: any) {
       console.error('Failed to save profile:', err);
+      setUploadNotice(err.message || 'Failed to save profile changes.');
     } finally {
       setIsSavingProfile(false);
     }
@@ -294,10 +272,7 @@ export const UserProfilePage: React.FC = () => {
                     src={url}
                     alt={`Avatar ${idx}`}
                     onClick={async () => {
-                      setAvatar(url);
-                      updateUserProfile({ avatar: url });
                       try {
-                        localStorage.setItem(`user_avatar_${user.id}`, url);
                         await cloudDatabaseService.upsertProfile({
                           user_id: user.id,
                           full_name: user.name,
@@ -311,10 +286,13 @@ export const UserProfilePage: React.FC = () => {
                         await supabase.auth.updateUser({
                           data: { avatar_url: url }
                         });
+                        setAvatar(url);
+                        updateUserProfile({ avatar: url });
                         setUploadNotice('✓ Avatar picture updated and saved!');
                         setTimeout(() => setUploadNotice(null), 3000);
-                      } catch (err) {
+                      } catch (err: any) {
                         console.error('Preset avatar save notice:', err);
+                        setUploadNotice(err.message || 'Failed to save avatar. Please try again.');
                       }
                     }}
                     className={`w-12 h-12 rounded-full object-cover cursor-pointer ring-2 transition-all hover:scale-105 ${

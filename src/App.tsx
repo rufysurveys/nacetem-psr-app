@@ -54,7 +54,8 @@ export const App: React.FC = () => {
   useEffect(() => {
     const handleAuthUser = async (u: any) => {
       if (!u) return;
-      if (useStore.getState().user?.id === u.id) return;
+      const activeUser = useStore.getState().user;
+      if (activeUser && activeUser.id === u.id && !activeUser.avatar.startsWith('data:image/')) return;
       try {
         const profile = await cloudDatabaseService.fetchProfileByUserId(u.id);
         const meta = u.user_metadata || {};
@@ -63,10 +64,31 @@ export const App: React.FC = () => {
         const mda = profile?.agency || profile?.ministry || meta.agency || meta.ministry || 'Federal Civil Service';
         const cadre = profile?.cadre || meta.cadre || 'Senior Executive Officer (GL 10)';
         const dept = profile?.department || meta.department || 'Administration';
-        const cachedAvatar = localStorage.getItem(`user_avatar_${u.id}`);
-        const avatar = profile?.avatar_url || cachedAvatar || meta.avatar_url || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200';
+        let avatar = profile?.avatar_url || meta.avatar_url || 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200';
 
-        loginWithDomain(email, name, mda, cadre, dept, avatar, u.id);
+        if (avatar.startsWith('data:image/')) {
+          const storedAvatar = await cloudDatabaseService.persistProfilePhoto(u.id, avatar);
+          if (storedAvatar !== avatar) {
+            await cloudDatabaseService.upsertProfile({
+              user_id: u.id,
+              full_name: name,
+              email,
+              ministry: profile?.ministry || meta.ministry || mda,
+              agency: mda,
+              department: dept,
+              cadre,
+              avatar_url: storedAvatar
+            });
+            await supabase.auth.updateUser({ data: { avatar_url: storedAvatar } });
+            avatar = storedAvatar;
+          }
+        }
+
+        if (useStore.getState().user?.id === u.id) {
+          updateUserProfile({ avatar });
+        } else {
+          loginWithDomain(email, name, mda, cadre, dept, avatar, u.id);
+        }
       } catch (err) {
         console.warn('Auth sync error:', err);
       }
@@ -93,7 +115,7 @@ export const App: React.FC = () => {
     return () => {
       authListener.subscription.unsubscribe();
     };
-  }, [loginWithDomain]);
+  }, [loginWithDomain, updateUserProfile]);
 
   // 2. Continuous global background cloud sync across all devices via Supabase -> dbGames
   const { fetchCloudGames } = useStore();

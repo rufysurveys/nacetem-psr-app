@@ -164,9 +164,12 @@ export const cloudDatabaseService = {
       .maybeSingle();
 
     if (error) {
-      console.warn('Upsert profile notice:', error.message);
+      throw new Error(error.message);
     }
-    return (data as ProfileRecord) || (validProfile as ProfileRecord);
+    if (!data) {
+      throw new Error('Profile could not be saved.');
+    }
+    return data as ProfileRecord;
   },
 
   // Backward-compatible adapters querying Supabase 'profiles' table
@@ -188,17 +191,22 @@ export const cloudDatabaseService = {
   },
 
   async registerMemberInCloud(member: RegisteredMember): Promise<boolean> {
-    const res = await this.upsertProfile({
-      user_id: ensureValidUUID(member.id),
-      full_name: member.name,
-      email: member.email,
-      ministry: member.mdaName,
-      agency: member.mdaName,
-      department: member.department,
-      cadre: member.cadre,
-      avatar_url: member.avatar
-    });
-    return !!res;
+    try {
+      await this.upsertProfile({
+        user_id: ensureValidUUID(member.id),
+        full_name: member.name,
+        email: member.email,
+        ministry: member.mdaName,
+        agency: member.mdaName,
+        department: member.department,
+        cadre: member.cadre,
+        avatar_url: member.avatar
+      });
+      return true;
+    } catch (error) {
+      console.warn('Profile registration notice:', error);
+      return false;
+    }
   },
 
   async sendDuelChallenge(_challenge: any): Promise<boolean> {
@@ -206,36 +214,37 @@ export const cloudDatabaseService = {
   },
 
   // --- STORAGE (PROFILE PHOTOS) ---
-  async uploadProfilePhoto(userId: string, file: File): Promise<string | null> {
-    try {
-      const fileExt = file.name.split('.').pop() || 'jpg';
-      const filePath = `avatars/${ensureValidUUID(userId)}_${Date.now()}.${fileExt}`;
+  async uploadProfilePhoto(userId: string, file: File): Promise<string> {
+    const compressedDataUrl = await compressImageFile(file, 512, 0.82);
+    const compressedBlob = await fetch(compressedDataUrl).then(response => response.blob());
+    const compressedFile = new File([compressedBlob], 'profile.jpg', { type: 'image/jpeg' });
+    const filePath = `avatars/${ensureValidUUID(userId)}/profile.jpg`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('profile-photos')
-        .upload(filePath, file, { upsert: true });
+    const { error } = await supabase.storage
+      .from('profile-photos')
+      .upload(filePath, compressedFile, {
+        upsert: true,
+        contentType: 'image/jpeg',
+        cacheControl: '3600'
+      });
 
-      if (!uploadError) {
-        const { data: publicUrlData } = supabase.storage
-          .from('profile-photos')
-          .getPublicUrl(filePath);
-
-        if (publicUrlData?.publicUrl) {
-          return publicUrlData.publicUrl;
-        }
-      } else {
-        console.warn('Storage bucket upload notice:', uploadError.message);
-      }
-    } catch (e) {
-      console.warn('Upload exception:', e);
+    if (error) {
+      throw new Error(`Profile photo upload failed: ${error.message}`);
     }
 
-    // Fallback: Compress file to tiny canvas Data URL so photo upload always succeeds and persists
-    try {
-      return await compressImageFile(file, 250, 0.8);
-    } catch (e) {
-      return null;
+    const { data } = supabase.storage.from('profile-photos').getPublicUrl(filePath);
+    if (!data.publicUrl) {
+      throw new Error('Profile photo uploaded, but its public URL could not be created.');
     }
+    return `${data.publicUrl}?v=${Date.now()}`;
+  },
+
+  async persistProfilePhoto(userId: string, avatarUrl: string): Promise<string> {
+    if (!avatarUrl.startsWith('data:image/')) return avatarUrl;
+
+    const imageBlob = await fetch(avatarUrl).then(response => response.blob());
+    const imageFile = new File([imageBlob], 'profile.jpg', { type: 'image/jpeg' });
+    return this.uploadProfilePhoto(userId, imageFile);
   },
 
   // --- GAMES ---
