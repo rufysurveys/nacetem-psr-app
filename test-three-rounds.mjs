@@ -80,6 +80,7 @@ await as(0);const oldActive=await val("SELECT (schedule_contest('Existing three 
 await as(1);await val('SELECT join_remote_game($1)',[oldActive]);await val('SELECT remote_room_state($1,$2)',[oldActive,ids[1]]);await as(0);await val('SELECT start_remote_game($1)',[oldActive]);
 await db.exec(readFileSync('supabase/migrations/011_five_round_contests.sql','utf8'));
 await db.exec(readFileSync('supabase/migrations/015_round_four_lives_and_winner_badges.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/016_allow_answers_after_life_depletion.sql','utf8'));
 const oldLength=await val('SELECT max(end_offset) FROM contest_rounds WHERE game_id=$1',[oldActive]);await db.query('UPDATE games SET started_at=clock_timestamp()-make_interval(secs=>$2) WHERE id=$1',[oldActive,oldLength+1]);
 const oldFinal=await val('SELECT remote_room_state($1,$2)',[oldActive,ids[0]]);assert.equal(oldFinal.game.status,'completed','active three-round contest survives engine upgrade');assert.equal(oldFinal.players[0].total_accuracy,0,'existing contest accuracy retains its 15-question denominator');
 const five=await val("SELECT (schedule_contest('Five round format','inter_agency','National',now()+interval '1 hour',now()+interval '1 hour',20,'',false)).id");
@@ -97,6 +98,12 @@ await db.query('UPDATE games SET started_at=clock_timestamp()-make_interval(secs
 await val('SELECT remote_room_state($1,$2)',[five,ids[0]]);
 await val("SELECT use_contest_lifeline($1,$2,'fifty')",[five,fiveQuestions[5].question_id]);
 await db.query('UPDATE game_players SET life_tokens=0 WHERE game_id=$1 AND user_id=$2',[five,ids[0]]);
+for (const questionIndex of [12,13]) {
+	await db.query('UPDATE games SET started_at=clock_timestamp()-make_interval(secs=>$2) WHERE id=$1',[five,fiveQuestions[questionIndex].answer_offset+1]);
+	await val('SELECT submit_player_answer($1,$2,$3,0)',[five,fiveQuestions[questionIndex].question_id,(fiveQuestions[questionIndex].correct_option_index+1)%4]);
+	assert.equal(await val('SELECT selected_option FROM answers WHERE game_id=$1 AND user_id=$2 AND question_id=$3',[five,ids[0],fiveQuestions[questionIndex].question_id]),(fiveQuestions[questionIndex].correct_option_index+1)%4,`Round 3 question ${questionIndex-9} accepts an answer at zero lives`);
+}
+await db.query('UPDATE game_players SET life_tokens=0 WHERE game_id=$1 AND user_id=$2',[five,ids[0]]);
 await db.query('UPDATE games SET started_at=clock_timestamp()-make_interval(secs=>$2) WHERE id=$1',[five,fiveQuestions[15].opens_offset+7]);
 const roundFourState=await val('SELECT remote_room_state($1,$2)',[five,ids[0]]);
 assert.equal(roundFourState.players.find(player=>player.user_id===ids[0]).life_tokens,1,'Round 4 restores one life for a player eliminated in Round 3');
@@ -104,7 +111,8 @@ await db.query('UPDATE games SET started_at=clock_timestamp()-make_interval(secs
 await val('SELECT submit_player_answer($1,$2,$3,0)',[five,fiveQuestions[15].question_id,(fiveQuestions[15].correct_option_index+1)%4]);
 assert.equal(await val('SELECT life_tokens FROM game_players WHERE game_id=$1 AND user_id=$2',[five,ids[0]]),0,'Round 4 continues to eliminate after the restored life is spent');
 await db.query('UPDATE games SET started_at=clock_timestamp()-make_interval(secs=>$2) WHERE id=$1',[five,fiveQuestions[16].answer_offset+1]);
-await fail('SELECT submit_player_answer($1,$2,$3,0)',[five,fiveQuestions[16].question_id,fiveQuestions[16].correct_option_index],/No lives remain/);
+await val('SELECT submit_player_answer($1,$2,$3,0)',[five,fiveQuestions[16].question_id,(fiveQuestions[16].correct_option_index+1)%4]);
+assert.equal(await val('SELECT selected_option FROM answers WHERE game_id=$1 AND user_id=$2 AND question_id=$3',[five,ids[0],fiveQuestions[16].question_id]),(fiveQuestions[16].correct_option_index+1)%4,'Round 4 question 2 accepts an answer after the revived life is spent');
 await db.query('UPDATE games SET started_at=clock_timestamp()-make_interval(secs=>$2) WHERE id=$1',[five,fiveQuestions[20].opens_offset+1]);
 await val('SELECT remote_room_state($1,$2)',[five,ids[0]]);await db.query('UPDATE game_players SET life_tokens=3 WHERE game_id=$1 AND user_id=$2',[five,ids[0]]);await val('SELECT place_contest_wager($1,$2,50)',[five,fiveQuestions[20].question_id]);
 await db.query('UPDATE games SET started_at=clock_timestamp()-make_interval(secs=>$2) WHERE id=$1',[five,fiveQuestions[20].answer_offset+1]);
