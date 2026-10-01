@@ -15,6 +15,7 @@ export interface RoomState {
   server_now: string;
   question_count: number;
   round_awards?: { round_number: number; user_id: string; full_name: string; correct_answers: number; response_time_ms: number }[];
+  winner_badge?: { verification_code: string; issued_at: string; winner_name: string; tournament_title: string; score: number; accuracy: number; completed_at: string } | null;
   group_standings?: { group_name: string; group_rank: number; total_score: number; correct_answers: number; winner: boolean; members: { user_id: string; full_name: string; avatar_url: string | null; score: number; individual_rank: number | null }[] }[];
   question: { id: string; question_text: string; options: string[]; question_order: number; opens_at: string; closes_at: string; round_number: number; base_points: number; life_cost: number; rule_ref: string | null; explanation: string | null; correct_option_index: number | null; source_ref: string | null } | null;
   answer: { selected_option: number; is_correct: boolean; points_earned: number; lives_lost: number; wager_delta: number } | null;

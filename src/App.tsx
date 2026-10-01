@@ -11,12 +11,14 @@ import { AdminDashboard } from './pages/AdminDashboard';
 import { UserProfilePage } from './pages/UserProfilePage';
 import { ScheduleTournamentPage } from './pages/ScheduleTournamentPage';
 import { RemoteMatchRoom } from './components/quiz/RemoteMatchRoom';
+import { WinnerBadgeVerification } from './components/quiz/WinnerBadgeVerification';
 import { Shield } from 'lucide-react';
 
 import { supabase, cloudDatabaseService } from './services/supabase';
 
 export const App: React.FC = () => {
   const { user, activePage, loginWithDomain, updateUserProfile, logout } = useStore();
+  const badgeCode = new URLSearchParams(window.location.search).get('badge');
   const [access, setAccess] = useState<{ userId: string; active: boolean; is_admin: boolean } | null>(null);
   const [accessError, setAccessError] = useState('');
   const [accessRetry, setAccessRetry] = useState(0);
@@ -144,6 +146,10 @@ export const App: React.FC = () => {
       void supabase.removeChannel(channel);
     };
   }, [fetchCloudGames, user?.id]);
+
+  if (badgeCode) {
+    return <WinnerBadgeVerification code={badgeCode} />;
+  }
 
   // FIRST POINT OF CONTACT: Sign Up / Sign In Page if unauthenticated
   if (!user) {
