@@ -178,7 +178,11 @@ export const AuthPage: React.FC = () => {
       });
 
       if (error) {
-        setResetError(error.message);
+        if (error.message.toLowerCase().includes('rate limit')) {
+          setResetError('Email dispatch rate limit reached (too many reset emails sent recently). Please wait 60 seconds before trying again, or change your password directly in the Supabase Dashboard SQL Editor.');
+        } else {
+          setResetError(error.message);
+        }
       } else {
         setResetMessage(`Password reset instructions have been dispatched to ${resetEmail}. Please check your email inbox.`);
       }
