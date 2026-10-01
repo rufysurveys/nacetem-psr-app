@@ -305,7 +305,11 @@ export const AuthPage: React.FC = () => {
       });
 
       if (error) {
-        setSignUpError(error.message);
+        if (error.message.toLowerCase().includes('rate limit')) {
+          setSignUpError('Email dispatch rate limit reached by Supabase Auth. To allow instant registration without email delays, turn off "Confirm email" in Supabase Dashboard (Authentication -> Providers -> Email).');
+        } else {
+          setSignUpError(error.message);
+        }
         setIsSubmitting(false);
         return;
       }
