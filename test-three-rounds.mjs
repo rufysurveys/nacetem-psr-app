@@ -106,6 +106,7 @@ const fiveFinal=await val('SELECT remote_room_state($1,$2)',[five,ids[0]]);asser
 const roundOneAward=fiveFinal.round_awards.find(a=>a.round_number===1);assert.equal(roundOneAward?.user_id,ids[0],'round award goes to participant with the most correct answers');assert.equal(roundOneAward?.correct_answers,1);
 await db.exec(readFileSync('supabase/migrations/012_groups_and_user_activity.sql','utf8'));
 await db.exec(readFileSync('supabase/migrations/013_repair_proctored_games_column.sql','utf8'));
+await db.exec(readFileSync('supabase/migrations/014_fix_activity_trigger_record_fields.sql','utf8'));
 assert.equal(await val("SELECT column_default FROM information_schema.columns WHERE table_schema='public' AND table_name='games' AND column_name='is_proctored'"),'false','proctoring column remains available with a safe default');
 assert.equal(await val("SELECT has_function_privilege('authenticated','public.app_assign_contest_group(uuid,uuid)','EXECUTE')"),false,'participants cannot call the group assignment helper directly');
 const groupGame=await val("SELECT (schedule_contest('Balanced groups','intra_dept','Dept A',now()+interval '1 hour',now()+interval '1 hour',20,'',false,'all',null,null,true,'PSR Core',ARRAY['North','South'])).id");
