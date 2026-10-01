@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore';
 import { supabase, cloudDatabaseService, GameRecord } from '../services/supabase';
 import { rememberTournamentLink } from '../services/roomLinks';
 import { DGWelcomeBanner } from '../components/DGWelcomeBanner';
-import { Calendar, Clock, Trophy, Users, CheckCircle2, Plus, Building2, Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, Trophy, Users, CheckCircle2, Plus, Building2, Sparkles, RefreshCw, AlertCircle, X } from 'lucide-react';
 
 export const ScheduleTournamentPage: React.FC = () => {
   const { user, setActivePage, setSelectedOpponent, dbGames, isLoadingGames, gamesError, fetchCloudGames } = useStore();
@@ -18,6 +18,9 @@ export const ScheduleTournamentPage: React.FC = () => {
   const [audienceValue, setAudienceValue] = useState(user?.mdaName || '');
   const [audienceAgency, setAudienceAgency] = useState(user?.mdaName || '');
   const [audienceDepartment, setAudienceDepartment] = useState(user?.department || '');
+  const [groupCompetition, setGroupCompetition] = useState(false);
+  const [groupCategorySet, setGroupCategorySet] = useState('PSR Core');
+  const [groupLabelsText, setGroupLabelsText] = useState('North, South');
   const invitationAttempted = useRef(false);
   const localDate = (date: Date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
@@ -29,7 +32,6 @@ export const ScheduleTournamentPage: React.FC = () => {
   const [competitionMode, setCompMode] = useState<'intra_dept' | 'inter_agency'>('intra_dept');
   const [targetOrg, setTargetOrg] = useState('National Centre for Technology Management (NACETEM)');
   const [startDateTime, setStartDateTime] = useState(() => localDate(new Date(Date.now() + 3600000)));
-  const [cutoffDateTime, setCutoffDateTime] = useState(() => localDate(new Date(Date.now() + 3600000)));
   const [description, setDescription] = useState('Official competition testing Public Service Rules mastery across federal agencies.');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -51,13 +53,16 @@ export const ScheduleTournamentPage: React.FC = () => {
         competition_mode: competitionMode,
         target_org: competitionMode === 'inter_agency' ? 'National Inter-Agency' : targetOrg,
         start_datetime: new Date(startDateTime).toISOString(),
-        cutoff_datetime: new Date(cutoffDateTime).toISOString(),
+        cutoff_datetime: new Date(startDateTime).toISOString(),
         max_players: maxPlayers,
         status: 'scheduled',
         description,
         audience_type: audienceType,
         audience_value: audienceType === 'department' ? audienceDepartment : audienceValue,
-        audience_agency: audienceType === 'department' ? audienceAgency : null
+        audience_agency: audienceType === 'department' ? audienceAgency : null,
+        group_competition: groupCompetition,
+        group_category_set: groupCompetition ? groupCategorySet : null,
+        group_labels: groupCompetition ? groupLabelsText.split(',').map(label => label.trim()).filter(Boolean) : []
       });
 
       // Re-query database to show new game across store
@@ -126,110 +131,93 @@ export const ScheduleTournamentPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={() => { setIsProctored(false); setIsModalOpen(true); }}
-          className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold px-5 py-3 rounded-2xl text-xs flex items-center gap-2 shadow-lg transition-all self-start md:self-auto shrink-0"
-        >
-          <Plus className="w-4 h-4 stroke-[3]" />
-          <span>Schedule New Tournament</span>
-        </button>
-        <button onClick={() => { setIsProctored(true); setIsModalOpen(true); }} className="bg-white text-emerald-950 font-extrabold px-5 py-3 rounded-2xl text-xs shadow-lg">Schedule Proctored Tournament</button>
+        <div className="flex flex-wrap gap-2 self-start md:self-auto">
+          <button
+            onClick={() => { setIsProctored(false); setScheduleError(null); setIsModalOpen(true); }}
+            className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold px-5 py-3 rounded-xl text-xs flex items-center gap-2 shadow-lg transition-all"
+          >
+            <Plus className="w-4 h-4 stroke-[3]" />
+            <span>Schedule Tournament</span>
+          </button>
+          <button onClick={() => { setIsProctored(true); setScheduleError(null); setIsModalOpen(true); }} className="bg-white text-emerald-950 font-extrabold px-4 py-3 rounded-xl text-xs shadow-lg">Proctored</button>
+        </div>
       </div>
 
       {joinError && <div role="alert" className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-rose-800">{joinError}</div>}
       {/* SCHEDULE MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 space-y-6 shadow-2xl border border-slate-200 animate-fadeIn">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-4">
+        <div className="fixed inset-0 z-50 bg-slate-950/55 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5">
+          <div role="dialog" aria-modal="true" aria-labelledby="schedule-title" className="bg-white rounded-2xl max-w-sm w-full max-h-[min(76dvh,600px)] shadow-2xl border border-slate-200 animate-fadeIn flex flex-col overflow-hidden">
+            <div className="flex justify-between items-center border-b border-slate-100 px-5 py-4 shrink-0">
               <div>
-                <h3 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-emerald-600" />
+                <h3 id="schedule-title" className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-emerald-600" />
                   <span>{isProctored ? 'Schedule Proctored Tournament' : 'Schedule New Tournament'}</span>
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">Set the date, time, and rules for officers to participate.</p>
+                <p className="text-xs text-slate-500 mt-0.5">Choose the match settings.</p>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 font-bold text-lg p-1"
+                aria-label="Close schedule form"
+                className="text-slate-400 hover:text-slate-600 p-2 rounded-lg hover:bg-slate-100"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {scheduleError && (
-              <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold p-3 rounded-xl flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                <span>{scheduleError}</span>
-              </div>
-            )}
+            <form onSubmit={handleCreateSchedule} className="min-h-0 flex-1 flex flex-col">
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 space-y-3 text-xs">
+                {scheduleError && (
+                  <div role="alert" className="bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold p-3 rounded-xl flex items-center gap-2 break-words">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                    <span>{scheduleError}</span>
+                  </div>
+                )}
+                <p className="bg-emerald-50 rounded-xl p-3">{isProctored ? 'Proctored five-round match. Participants consent to camera and full-screen sharing, fullscreen checks, face monitoring, and reviewable flags.' : 'Five timed rounds with a shared rules wheel, lifelines, scenario decisions, and a virtual jackpot. No camera or screen monitoring.'}</p>
+                <div className="grid grid-cols-[1fr_2fr] gap-3">
+                  <label className="block font-bold text-slate-700">Players
+                    <input type="number" required min={2} max={1000} value={maxPlayers} onChange={e => setMaxPlayers(Number(e.target.value))} className="mt-1 w-full bg-slate-50 border rounded-lg px-3 py-2 font-medium" />
+                  </label>
+                  <label className="block font-bold text-slate-700">Tournament title
+                    <input type="text" required value={title} onChange={e => setTitle(e.target.value)} className="mt-1 w-full bg-slate-50 border rounded-lg px-3 py-2 font-medium" />
+                  </label>
+                </div>
 
-            <form onSubmit={handleCreateSchedule} className="space-y-4 text-xs">
-              <p className="bg-emerald-50 rounded-xl p-3">{isProctored ? 'Same three-round contest, with camera, entire-screen sharing, fullscreen and reviewable monitoring flags. Participants must consent and complete setup on a compatible desktop browser.' : 'Three timed rounds, a shared section wheel, 50:50, Rulebook Peek, lives and virtual jackpot points. No camera or screen monitoring.'}</p>
-              <div><label className="block font-bold text-slate-700 mb-1">Participant capacity (2-1,000)</label>
-                <input type="number" required min={2} max={1000} value={maxPlayers} onChange={e => setMaxPlayers(Number(e.target.value))} className="w-full bg-slate-50 border rounded-xl px-3 py-2" />
-              </div>
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Tournament Title</label>
-                <input
-                  type="text"
-                  required
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-emerald-600"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Competition Mode</label>
-                  <select
-                    value={competitionMode}
-                    onChange={(e) => setCompMode(e.target.value as any)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-emerald-600"
-                  >
-                    <option value="intra_dept">Inter-Departmental Challenge</option>
-                    <option value="inter_agency">Inter-Agency Championship</option>
-                  </select>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block font-bold text-slate-700">Competition mode
+                    <select
+                      value={competitionMode}
+                      onChange={(e) => setCompMode(e.target.value as 'intra_dept' | 'inter_agency')}
+                      className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-medium"
+                    >
+                      <option value="intra_dept">Inter-Departmental</option>
+                      <option value="inter_agency">Inter-Agency</option>
+                    </select>
+                  </label>
+                  <label className="block font-bold text-slate-700">Target organization
+                    <input
+                      type="text"
+                      required
+                      value={targetOrg}
+                      onChange={(e) => setTargetOrg(e.target.value)}
+                      className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-medium"
+                    />
+                  </label>
                 </div>
 
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Target Organization</label>
-                  <input
-                    type="text"
-                    required
-                    value={targetOrg}
-                    onChange={(e) => setTargetOrg(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-emerald-600"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Start Date &amp; Time</label>
+                  <label className="block font-bold text-slate-700">Start date &amp; time
                   <input
                     type="datetime-local"
                     required
                     value={startDateTime}
                     onChange={(e) => setStartDateTime(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-emerald-600"
+                    className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-medium"
                   />
+                  </label>
                 </div>
 
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Registration Cutoff</label>
-                  <input
-                    type="datetime-local"
-                    required
-                    value={cutoffDateTime}
-                    onChange={(e) => setCutoffDateTime(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-emerald-600"
-                  />
-                </div>
-              </div>
-
-              <fieldset className="space-y-3 rounded-xl border border-slate-200 p-4">
+                <fieldset className="space-y-2 rounded-lg border border-slate-200 p-3">
                 <legend className="px-1 font-bold text-slate-700">Who can see and join this tournament?</legend>
                 <select
                   value={audienceType}
@@ -250,19 +238,37 @@ export const ScheduleTournamentPage: React.FC = () => {
                 {audienceType === 'department' && <div className="grid gap-3 sm:grid-cols-2"><input required readOnly={user?.role !== 'admin'} aria-label="Organization allowed to join" placeholder="Organization name" value={audienceAgency} onChange={e => setAudienceAgency(e.target.value)} className="w-full border rounded-xl px-3 py-2 read-only:bg-slate-100" /><input required readOnly={user?.role !== 'admin'} aria-label="Department allowed to join" placeholder="Department name" value={audienceDepartment} onChange={e => setAudienceDepartment(e.target.value)} className="w-full border rounded-xl px-3 py-2 read-only:bg-slate-100" /></div>}
                 {audienceType === 'person' && <input required readOnly={user?.role !== 'admin'} type="email" aria-label="Person allowed to join" placeholder="Registered user's email" value={audienceValue} onChange={e => setAudienceValue(e.target.value)} className="w-full border rounded-xl px-3 py-2 read-only:bg-slate-100" />}
                 <p className="text-[11px] text-slate-500">{user?.role === 'admin' ? 'Administrator scheduling can target any organization, department, or registered person.' : 'You can schedule for everyone or limit participation to your own organization, department, or account.'}</p>
-              </fieldset>
+                </fieldset>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">Tournament Description</label>
-                <textarea
-                  rows={2}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-medium focus:outline-none focus:border-emerald-600"
-                ></textarea>
+                <fieldset className="space-y-2 rounded-lg border border-slate-200 p-3">
+                <legend className="px-1 font-bold text-slate-700">Competition format</legend>
+                <label className="flex items-center gap-2 font-semibold">
+                  <input type="checkbox" checked={groupCompetition} onChange={e => setGroupCompetition(e.target.checked)} />
+                  Enable balanced group competition
+                </label>
+                {groupCompetition && <>
+                  <label className="block">Category set
+                    <input required value={groupCategorySet} onChange={e => setGroupCategorySet(e.target.value)} className="mt-1 w-full border rounded-xl px-3 py-2" placeholder="e.g. PSR Core" />
+                  </label>
+                  <label className="block">Group names, comma separated
+                    <input required value={groupLabelsText} onChange={e => setGroupLabelsText(e.target.value)} className="mt-1 w-full border rounded-xl px-3 py-2" placeholder="North, South" />
+                  </label>
+                  <p className="text-[11px] text-slate-500">Participants are assigned to the smallest group as they join. Use 2 to 8 unique names.</p>
+                </>}
+                </fieldset>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Tournament description</label>
+                  <textarea
+                    rows={2}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-medium"
+                  />
+                </div>
               </div>
 
-              <div className="pt-3 border-t border-slate-100 flex justify-end gap-2">
+              <div className="px-5 py-3 border-t border-slate-100 flex justify-end gap-2 shrink-0 bg-white">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}

@@ -61,6 +61,57 @@ is checked directly against the supplied file.
 
 ## Activation reference
 
+## Five-round and proctoring upgrade
+
+The frontend and database migrations must be deployed together. Back up the
+database, then apply any missing migrations in numeric order through
+`013_repair_proctored_games_column.sql`. In particular, migration 006 adds
+`games.is_proctored`, 007 installs the proctoring RPCs and review dashboard,
+010 adds audience-scoped scheduling, 011 enables five-round contests, and 012
+adds group competition and activity logging. Migration 013 safely repairs the
+specific missing-column error if an earlier deployment skipped the column
+addition. Do not rerun migrations that have already been applied; use the
+Supabase migration history to identify the first missing migration.
+
+The five-round migration keeps already-started three-round contests on their
+original engine and starts new contests on the five-round engine. New games use
+objective PSR questions in rounds 1–3, scenario decisions in rounds 4–5,
+per-round lifelines, a Round 5 virtual jackpot, and server-calculated
+fastest-and-most-accurate round awards.
+
+Proctored contests require every connected participant to consent, enable a
+camera, share the entire screen and enter fullscreen on a supported desktop
+browser. Face-count and sustained gaze signals are local automated flags for
+human review, not proof of misconduct. Hidden tabs, focus loss, fullscreen exits
+and stopped camera/screen sharing are also flagged. Host and administrator
+monitors receive periodic camera/screen snapshots, not continuous video. A
+browser cannot reliably detect other applications or external devices. Never
+use monitoring without informed participant consent and an appropriate privacy
+policy.
+
+The login page uses Supabase email/password authentication. Create the
+administrator account through Supabase Auth, then assign its user the protected
+administrator role through the existing admin provisioning process. Never put
+an administrator password or service-role key in frontend code.
+
+For initial provisioning, create/confirm the user's account in Supabase Auth,
+ensure its profile has been created, then run this in the SQL Editor with the
+account email substituted. This grants the protected tournament-admin role; it
+does not create or change a password:
+
+```sql
+INSERT INTO public.app_access (user_id, role)
+SELECT user_id, 'admin'
+FROM public.profiles
+WHERE lower(email) = lower('ADMIN_EMAIL')
+ON CONFLICT (user_id)
+DO UPDATE SET role = 'admin', suspended = false, deleted_at = NULL;
+```
+
+Use the ordinary email/password sign-in form after provisioning. Do not add
+credentials to the source repository; rotate any password that has been shared
+in chat before using it for the administrator account.
+
 Before activation, the database contained four games and zero questions, and
 the public Vercel deployment served the old code. The following steps document
 the completed activation and can be used for future installations.
@@ -108,9 +159,10 @@ not a production concurrency/load benchmark or a real websocket/browser test.
    not count as a third person. More department members can join until cutoff or
    capacity. Each account registers once.
 5. When the host and at least one guest are connected, the host clicks **Start contest for everyone**.
-   Both devices receive a five-second countdown and the same ten questions, each
-   with 15 seconds to answer and a three-second transition. Skipping a question
-   scores zero; clients cannot advance questions independently.
+   both devices receive a shared countdown and identical questions/timers. New
+   contests have five rounds with five questions each; old active contests keep
+   their original format. Skipping a question scores zero; clients cannot advance
+   questions independently.
 6. Submit correct and incorrect answers from both devices. Scores should update
    remotely. Refresh a device: its saved answer and current shared round recover.
 7. Close a device: presence removes it; when realtime is unavailable, the database
