@@ -33,7 +33,7 @@ export const RemoteMatchRoom:React.FC=()=>{
  const roundLabels=existingThreeRound?threeRoundLabels:fiveRoundLabels;
  const seconds=room?.boundary?remainingSeconds(room.boundary,now):0;
  const eligible=!room?.game.is_proctored||proctorReady;
- const canAnswer=phase==='answer'&&seconds>0&&!room?.answer&&!busy&&eligible;
+ const canAnswer=phase==='answer'&&!room?.answer&&!busy&&eligible;
  return <div className="max-w-7xl mx-auto px-4 py-8 space-y-5"><header className="bg-emerald-950 text-white rounded-3xl p-6 space-y-3"><div className="flex justify-between gap-4"><span className="text-emerald-200 font-bold text-sm">{room?.game.is_proctored?'PROCTORED':'OPEN'} DEPARTMENT CONTEST {host?'· YOU ARE THE HOST':''}</span><button onClick={leave} className="underline">Leave room</button></div><h1 className="text-2xl font-black">{room?.game.title||'Connecting to tournament…'}</h1><button onClick={async()=>{try{await copyTournamentLink(gameId);setCopied(true);}catch(e){setError(String(e));}}} className="font-bold">{copied?'Link copied ✓':'Copy room link'}</button><input aria-label="Tournament invitation link" readOnly value={tournamentLink(gameId)} onFocus={e=>e.target.select()} className="block w-full bg-white/10 rounded-lg p-2 text-xs"/></header>
  {error&&<div role="alert" className="bg-rose-50 text-rose-800 border border-rose-200 p-4 rounded-xl">{error}<button className="ml-3 underline" onClick={()=>{setError('');void refresh();}}>Retry</button></div>}
  {room?.game.is_proctored&&<ProctorPanel gameId={gameId} host={host} active={phase!=='completed'&&phase!=='cancelled'} onReady={setProctorReady}/>}
