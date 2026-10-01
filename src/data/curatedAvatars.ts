@@ -5,10 +5,10 @@ export type CuratedAvatar = {
 };
 
 export const CURATED_AVATARS: CuratedAvatar[] = [
-  { id: 'av-1', title: 'Creative professional', url: '/avatars/creative-professional.svg' },
-  { id: 'av-2', title: 'Confident leader', url: '/avatars/confident-leader.svg' },
-  { id: 'av-3', title: 'Warm collaborator', url: '/avatars/warm-collaborator.svg' },
-  { id: 'av-4', title: 'Technology specialist', url: '/avatars/technology-specialist.svg' },
-  { id: 'av-5', title: 'Policy advisor', url: '/avatars/policy-advisor.svg' },
-  { id: 'av-6', title: 'Senior administrator', url: '/avatars/senior-administrator.svg' },
+  { id: 'av-ryu', title: 'Ryu - Dragon Fist', url: '/avatars/ryu-dragon-fighter.svg' },
+  { id: 'av-chunli', title: 'Chun-Li - Lightning Kick', url: '/avatars/chun-li-legend.svg' },
+  { id: 'av-ken', title: 'Ken - Flame Striker', url: '/avatars/ken-flame-master.svg' },
+  { id: 'av-guile', title: 'Guile - Sonic Commando', url: '/avatars/guile-sonic-commando.svg' },
+  { id: 'av-blanka', title: 'Blanka - Electric Beast', url: '/avatars/blanka-electric-beast.svg' },
+  { id: 'av-cammy', title: 'Cammy - Delta Operative', url: '/avatars/cammy-delta-operative.svg' },
 ];

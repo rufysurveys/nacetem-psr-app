@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="100%" height="100%" role="img" aria-label="Blanka Electric Beast Avatar">
+  <defs>
+    <linearGradient id="blanka-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#15803d"/>
+      <stop offset="50%" stop-color="#047857"/>
+      <stop offset="100%" stop-color="#022c22"/>
+    </linearGradient>
+    <radialGradient id="blanka-volt" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#facc15" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#16a34a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="blanka-skin" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4ade80"/>
+      <stop offset="100%" stop-color="#15803d"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background Card -->
+  <rect width="200" height="200" rx="40" fill="url(#blanka-bg)"/>
+  
+  <!-- Lightning Voltage Sparks -->
+  <g stroke="#fef08a" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M25 40 L35 60 L28 75 L42 100"/>
+    <path d="M175 40 L165 60 L172 75 L158 100"/>
+    <path d="M100 10 L110 30 L95 40 L105 55"/>
+  </g>
+  <circle cx="100" cy="100" r="75" fill="url(#blanka-volt)"/>
+
+  <!-- Character Group -->
+  <g transform="translate(0, 5)">
+    <!-- Muscular Shoulders (Green Skin) -->
+    <path d="M30 195 C 35 140, 58 128, 100 128 C 142 128, 165 140, 170 195 Z" fill="url(#blanka-skin)"/>
+    <!-- Orange Chest Hair Tuft -->
+    <path d="M80 145 C 90 130, 110 130, 120 145 C 110 175, 90 175, 80 145 Z" fill="#ea580c"/>
+
+    <!-- Neck -->
+    <path d="M78 105 L78 136 C 78 146, 122 146, 122 105 Z" fill="#166534"/>
+
+    <!-- Head (Green Beast) -->
+    <path d="M68 65 C 68 45, 132 45, 132 65 C 132 105, 122 120, 100 120 C 78 120, 68 105, 68 65 Z" fill="url(#blanka-skin)"/>
+
+    <!-- Pointy Beast Ears -->
+    <path d="M68 75 L48 65 L64 88 Z" fill="#15803d"/>
+    <path d="M132 75 L152 65 L136 88 Z" fill="#15803d"/>
+
+    <!-- Glowing Yellow Eyes & Ferocious Brow -->
+    <path d="M72 62 L94 68 L94 58 Z" fill="#022c22"/>
+    <ellipse cx="85" cy="70" rx="6" ry="5" fill="#fef08a"/>
+    <circle cx="85" cy="70" r="2" fill="#000000"/>
+
+    <path d="M128 62 L106 68 L106 58 Z" fill="#022c22"/>
+    <ellipse cx="115" cy="70" rx="6" ry="5" fill="#fef08a"/>
+    <circle cx="115" cy="70" r="2" fill="#000000"/>
+
+    <!-- Beast Snout / Nose -->
+    <ellipse cx="100" cy="82" rx="7" ry="4" fill="#14532d"/>
+
+    <!-- Ferocious Teeth / Roar -->
+    <path d="M82 94 Q100 88 118 94 Q115 112 85 112 Z" fill="#451a03"/>
+    <!-- Fangs -->
+    <polygon points="88,94 92,102 95,94" fill="#ffffff"/>
+    <polygon points="105,94 108,102 112,94" fill="#ffffff"/>
+    <polygon points="90,110 94,103 98,110" fill="#ffffff"/>
+    <polygon points="102,110 106,103 110,110" fill="#ffffff"/>
+
+    <!-- Wild Spiky Orange Hair -->
+    <path d="M50 50 C 30 20, 60 5, 90 2 C 100 0, 130 5, 150 25 C 170 45, 150 65, 140 70 C 130 40, 110 15, 90 18 C 70 20, 60 40, 50 50 Z" fill="#f97316"/>
+    <!-- Spikes bursting -->
+    <path d="M42 45 L20 22 L48 28 L55 5 L78 18 L92 -5 L108 12 L132 -2 L138 24 L162 18 L148 45 L172 40 L145 62 Z" fill="#ea580c"/>
+    <path d="M55 35 L70 18 L88 24 L102 5 L118 20 Z" fill="#facc15"/>
+  </g>
+
+  <!-- Arcade Banner -->
+  <rect x="25" y="162" width="150" height="26" rx="13" fill="#0f172a" stroke="#facc15" stroke-width="2"/>
+  <text x="100" y="179" font-family="'Impact', 'Arial Black', sans-serif" font-size="11" fill="#fef08a" text-anchor="middle" letter-spacing="1">BLANKA • ELECTRIC BEAST</text>
+</svg>

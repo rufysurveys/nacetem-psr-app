@@ -256,7 +256,7 @@ export const UserProfilePage: React.FC = () => {
 
             {/* Avatar Preset Picker */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2">Or Choose Preset Avatar Picture</label>
+              <label className="block text-xs font-bold text-slate-700 mb-2">Or Choose Street Fighter & Arcade Avatar</label>
               <div className="flex items-center gap-3 overflow-x-auto pb-2">
                 {CURATED_AVATARS.map((preset) => (
                   <button

@@ -683,7 +683,7 @@ export const AuthPage: React.FC = () => {
 
                     {/* Curated Avatars */}
                     <div className="pt-2 border-t border-slate-200">
-                      <span className="block text-[11px] font-semibold text-slate-600 mb-2">Choose an illustrated professional avatar:</span>
+                      <span className="block text-[11px] font-semibold text-slate-600 mb-2">Choose a Street Fighter & Arcade Character Avatar:</span>
                       <div className="grid grid-cols-6 gap-2">
                         {CURATED_AVATARS.map((av) => (
                           <button
