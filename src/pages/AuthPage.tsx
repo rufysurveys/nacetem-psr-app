@@ -313,17 +313,25 @@ export const AuthPage: React.FC = () => {
         return;
       }
 
-      // 3. Upload Custom Profile Photo to Supabase Storage if file selected
+      // 3. Upload Custom Profile Photo to Supabase Storage if file selected & session active
       let finalAvatarUrl = initialAvatarUrl;
       if (customPhotoFile) {
         try {
-          finalAvatarUrl = await cloudDatabaseService.uploadProfilePhoto(user.id, customPhotoFile);
+          const uploadedUrl = await cloudDatabaseService.uploadProfilePhoto(user.id, customPhotoFile);
+          if (uploadedUrl) {
+            finalAvatarUrl = uploadedUrl;
+          }
         } catch (uploadError) {
-          console.info('Profile photo will be saved after email confirmation:', uploadError);
+          console.info('Profile photo stored as compressed thumbnail during signup:', uploadError);
         }
       }
 
-      // 4. Save Profile record in public.profiles table
+      // Cache avatar locally immediately for initial session
+      try {
+        localStorage.setItem(`user_avatar_${user.id}`, finalAvatarUrl);
+      } catch (e) {}
+
+      // 4. Save Profile record in public.profiles table if permitted
       const fullOrgName = selectedAgency && selectedAgency !== `${selectedMinistry} Headquarters` 
         ? selectedAgency 
         : selectedMinistry;
@@ -340,14 +348,18 @@ export const AuthPage: React.FC = () => {
           avatar_url: finalAvatarUrl
         });
       } catch (profileError) {
-        console.info('Profile will be synchronized after email confirmation:', profileError);
+        console.info('Profile will be synchronized upon email confirmation:', profileError);
       }
 
-      // Update auth metadata with final avatar URL if storage upload produced a new URL
-      if (finalAvatarUrl !== initialAvatarUrl) {
-        await supabase.auth.updateUser({
-          data: { avatar_url: finalAvatarUrl }
-        });
+      // Update auth metadata with final avatar URL only if an active session is present
+      if (data.session && finalAvatarUrl !== initialAvatarUrl) {
+        try {
+          await supabase.auth.updateUser({
+            data: { avatar_url: finalAvatarUrl }
+          });
+        } catch (updateErr) {
+          console.info('Auth metadata update notice:', updateErr);
+        }
       }
 
       // If Supabase auto-confirmed or session is present, log in immediately
