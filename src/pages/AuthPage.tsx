@@ -102,29 +102,50 @@ export const AuthPage: React.FC = () => {
 
   // Listen for Email Confirmation & Password Reset Link Redirects
   useEffect(() => {
-    const hash = window.location.hash;
-    const search = window.location.search;
+    const processRecoverySession = async () => {
+      const hash = window.location.hash;
+      const search = window.location.search;
 
-    if (hash.includes('type=recovery') || search.includes('type=recovery')) {
-      setAuthTab('reset_password');
-    } else if (hash.includes('access_token') || hash.includes('type=signup')) {
-      setRegStep('verified_success');
-      supabase.auth.getSession().then(({ data }) => {
-        if (data.session?.user) {
-          const u = data.session.user;
-          const meta = u.user_metadata || {};
-          const name = meta.full_name || u.email?.split('@')[0] || 'Civil Servant';
-          const mda = meta.agency || meta.ministry || 'Federal Civil Service';
-          const cadre = meta.cadre || 'Senior Executive Officer (GL 10)';
-          const dept = meta.department || 'Administration';
-          const avatar = meta.avatar_url || CURATED_AVATARS[0].url;
+      if (hash.includes('type=recovery') || search.includes('type=recovery') || hash.includes('access_token')) {
+        const hashParams = new URLSearchParams(hash.startsWith('#') ? hash.substring(1) : hash);
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const type = hashParams.get('type') || new URLSearchParams(search).get('type');
 
-          if (useStore.getState().user?.id !== u.id) {
-            loginWithDomain(u.email || '', name, mda, cadre, dept, avatar, u.id);
+        if (accessToken && refreshToken) {
+          try {
+            await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken
+            });
+          } catch (e) {
+            console.warn('Set recovery session notice:', e);
           }
         }
-      });
-    }
+
+        if (type === 'recovery' || hash.includes('type=recovery')) {
+          setAuthTab('reset_password');
+        } else if (type === 'signup' || hash.includes('type=signup')) {
+          setRegStep('verified_success');
+          const { data } = await supabase.auth.getSession();
+          if (data.session?.user) {
+            const u = data.session.user;
+            const meta = u.user_metadata || {};
+            const name = meta.full_name || u.email?.split('@')[0] || 'Civil Servant';
+            const mda = meta.agency || meta.ministry || 'Federal Civil Service';
+            const cadre = meta.cadre || 'Senior Executive Officer (GL 10)';
+            const dept = meta.department || 'Administration';
+            const avatar = meta.avatar_url || CURATED_AVATARS[0].url;
+
+            if (useStore.getState().user?.id !== u.id) {
+              loginWithDomain(u.email || '', name, mda, cadre, dept, avatar, u.id);
+            }
+          }
+        }
+      }
+    };
+
+    void processRecoverySession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') {
@@ -187,13 +208,44 @@ export const AuthPage: React.FC = () => {
     setIsSubmitting(true);
 
     try {
+      // 1. Verify active session or extract from URL hash
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData.session) {
+        const hash = window.location.hash;
+        const hashParams = new URLSearchParams(hash.startsWith('#') ? hash.substring(1) : hash);
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+
+        if (accessToken && refreshToken) {
+          const { error: setSessionErr } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
+          if (setSessionErr) {
+            setResetError('Your password recovery link has expired or is invalid. Please request a new reset link.');
+            setIsSubmitting(false);
+            return;
+          }
+        } else {
+          setResetError('Your password recovery link has expired or is invalid. Please request a new reset link.');
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      // 2. Update user password in Supabase Auth
       const { error } = await supabase.auth.updateUser({ password: newPassword });
 
       if (error) {
-        setResetError(error.message);
+        if (error.message.toLowerCase().includes('session') || error.message.toLowerCase().includes('auth session missing')) {
+          setResetError('Your password recovery link has expired or is invalid. Please request a new reset link.');
+        } else {
+          setResetError(error.message);
+        }
       } else {
-        setResetMessage('Your password has been successfully updated! Redirecting to sign in...');
-        setTimeout(() => {
+        setResetMessage('✓ Password updated successfully! Redirecting to Sign In...');
+        setTimeout(async () => {
+          await supabase.auth.signOut();
           setAuthTab('signin');
           setResetMessage(null);
           setResetError(null);
