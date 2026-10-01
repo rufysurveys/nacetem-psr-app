@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { CadreRank } from '../types';
 import { cloudDatabaseService, supabase } from '../services/supabase';
+import { CURATED_AVATARS } from '../data/curatedAvatars';
 import { ShieldCheck, Award, Building2, CheckCircle2, Clock, Upload, Camera, LogOut, Edit2, Save, X, RefreshCw } from 'lucide-react';
 
 export const UserProfilePage: React.FC = () => {
@@ -34,15 +35,6 @@ export const UserProfilePage: React.FC = () => {
   }, [user?.avatar]);
 
   if (!user) return null;
-
-  const presetAvatars = [
-    'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200',
-    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200',
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
-    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200',
-    'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&q=80&w=200',
-    'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=200'
-  ];
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -266,11 +258,12 @@ export const UserProfilePage: React.FC = () => {
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-2">Or Choose Preset Avatar Picture</label>
               <div className="flex items-center gap-3 overflow-x-auto pb-2">
-                {presetAvatars.map((url, idx) => (
-                  <img
-                    key={idx}
-                    src={url}
-                    alt={`Avatar ${idx}`}
+                {CURATED_AVATARS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    aria-label={`Choose ${preset.title} avatar`}
+                    title={preset.title}
                     onClick={async () => {
                       try {
                         await cloudDatabaseService.upsertProfile({
@@ -281,13 +274,13 @@ export const UserProfilePage: React.FC = () => {
                           agency: user.mdaName,
                           department: user.department,
                           cadre: user.cadre,
-                          avatar_url: url
+                          avatar_url: preset.url
                         });
                         await supabase.auth.updateUser({
-                          data: { avatar_url: url }
+                          data: { avatar_url: preset.url }
                         });
-                        setAvatar(url);
-                        updateUserProfile({ avatar: url });
+                        setAvatar(preset.url);
+                        updateUserProfile({ avatar: preset.url });
                         setUploadNotice('✓ Avatar picture updated and saved!');
                         setTimeout(() => setUploadNotice(null), 3000);
                       } catch (err: any) {
@@ -295,10 +288,12 @@ export const UserProfilePage: React.FC = () => {
                         setUploadNotice(err.message || 'Failed to save avatar. Please try again.');
                       }
                     }}
-                    className={`w-12 h-12 rounded-full object-cover cursor-pointer ring-2 transition-all hover:scale-105 ${
-                      avatar === url ? 'ring-emerald-600 ring-offset-2' : 'ring-slate-200'
+                    className={`h-14 w-14 shrink-0 overflow-hidden rounded-xl border-2 p-0.5 transition-all hover:-translate-y-0.5 ${
+                      avatar === preset.url ? 'border-emerald-600 ring-2 ring-emerald-500/30' : 'border-slate-200 hover:border-slate-400'
                     }`}
-                  />
+                  >
+                    <img src={preset.url} alt="" className="h-full w-full rounded-lg object-cover" />
+                  </button>
                 ))}
               </div>
             </div>

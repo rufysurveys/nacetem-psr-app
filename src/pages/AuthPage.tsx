@@ -5,16 +5,8 @@ import { FEDERAL_MINISTRIES_AND_AGENCIES } from '../data/ministriesAndAgencies';
 import { supabase, cloudDatabaseService } from '../services/supabase';
 import { tournamentLink } from '../services/roomLinks';
 import { compressImageFile } from '../utils/imageCompressor';
+import { CURATED_AVATARS } from '../data/curatedAvatars';
 import { ShieldCheck, Mail, Building2, User, Sparkles, Zap, Users, Globe, Camera, CheckCircle2, RefreshCw, Lock, LogIn, UserPlus, ExternalLink, AlertCircle, Eye, EyeOff } from 'lucide-react';
-
-export const CURATED_AVATARS = [
-  { id: 'av-1', title: 'Executive Officer Female', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200' },
-  { id: 'av-2', title: 'Director Male', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200' },
-  { id: 'av-3', title: 'Senior Executive Female', url: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200' },
-  { id: 'av-4', title: 'Senior Administrative Male', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200' },
-  { id: 'av-5', title: 'Chief Officer Female', url: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=200' },
-  { id: 'av-6', title: 'Permanent Secretary Male', url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200' }
-];
 
 export const AuthPage: React.FC = () => {
   const { loginWithDomain, setCompetitionMode } = useStore();
@@ -485,7 +477,7 @@ export const AuthPage: React.FC = () => {
       'National Centre for Technology Management (NACETEM)', 
       'Assistant Director (GL 15)', 
       'Planning, Programming and Linkages',
-      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200',
+      CURATED_AVATARS[0].url,
       '7558f96c-c978-44b4-874b-124ea47dadb6'
     );
   };
@@ -660,7 +652,7 @@ export const AuthPage: React.FC = () => {
                     <label className="block text-xs font-bold text-slate-800 flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
                         <Camera className="w-4 h-4 text-emerald-600" />
-                        <span>Profile Photo &amp; Executive Avatars</span>
+                        <span>Profile Photo &amp; Illustrated Avatars</span>
                       </span>
                     </label>
 
@@ -691,12 +683,14 @@ export const AuthPage: React.FC = () => {
 
                     {/* Curated Avatars */}
                     <div className="pt-2 border-t border-slate-200">
-                      <span className="block text-[11px] font-semibold text-slate-600 mb-2">Or Choose Curated Civil Servant Avatar:</span>
+                      <span className="block text-[11px] font-semibold text-slate-600 mb-2">Choose an illustrated professional avatar:</span>
                       <div className="grid grid-cols-6 gap-2">
                         {CURATED_AVATARS.map((av) => (
                           <button
                             key={av.id}
                             type="button"
+                            aria-label={`Choose ${av.title} avatar`}
+                            title={av.title}
                             onClick={() => {
                               setSelectedAvatarUrl(av.url);
                               setCustomPhotoPreview(null);
@@ -708,7 +702,7 @@ export const AuthPage: React.FC = () => {
                                 : 'border-slate-200 hover:border-slate-400'
                             }`}
                           >
-                            <img src={av.url} alt={av.title} className="w-full h-10 object-cover rounded-lg" />
+                            <img src={av.url} alt="" className="w-full h-10 object-cover rounded-lg" />
                           </button>
                         ))}
                       </div>
