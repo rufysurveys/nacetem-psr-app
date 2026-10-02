@@ -237,26 +237,21 @@ export const UserProfilePage: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Grade Cadre Level</label>
-                <select
+                <label className="block text-xs font-bold text-slate-700 mb-1">Grade Cadre Level / Rank</label>
+                <input
+                  type="text"
+                  required
                   value={cadre}
-                  onChange={(e) => setCadre(e.target.value as CadreRank)}
+                  onChange={(e) => setCadre(e.target.value)}
+                  placeholder="e.g. Assistant Director (GL 15), Chief Research Officer..."
                   className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900"
-                >
-                  <option value="Permanent Secretary">Permanent Secretary</option>
-                  <option value="Director (GL 17)">Director (GL 17)</option>
-                  <option value="Deputy Director (GL 16)">Deputy Director (GL 16)</option>
-                  <option value="Assistant Director (GL 15)">Assistant Director (GL 15)</option>
-                  <option value="Chief Administrative Officer (GL 14)">Chief Administrative Officer (GL 14)</option>
-                  <option value="Principal Officer (GL 12)">Principal Officer (GL 12)</option>
-                  <option value="Senior Executive Officer (GL 10)">Senior Executive Officer (GL 10)</option>
-                </select>
+                />
               </div>
             </div>
 
             {/* Avatar Preset Picker */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-2">Or Choose Street Fighter & Arcade Avatar</label>
+              <label className="block text-xs font-bold text-slate-700 mb-2">Or Choose Avatar :</label>
               <div className="flex items-center gap-3 overflow-x-auto pb-2">
                 {CURATED_AVATARS.map((preset) => (
                   <button

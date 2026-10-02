@@ -7,7 +7,8 @@ export type CadreRank =
   | 'Principal Officer (GL 12)'
   | 'Senior Executive Officer (GL 10)'
   | 'Higher Executive Officer (GL 08)'
-  | 'Executive Officer (GL 07)';
+  | 'Executive Officer (GL 07)'
+  | string;
 
 export type CompetitionMode = 'intra' | 'inter';
 
