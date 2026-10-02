@@ -273,6 +273,8 @@ export const AuthPage: React.FC = () => {
       const invitedGame = new URLSearchParams(window.location.search).get('match');
       const redirectUrl = invitedGame ? tournamentLink(invitedGame) : window.location.origin;
 
+      const finalCadre = (customCadreInput.trim() || selectedCadre || 'Officer').trim();
+
       // 1. Determine initial avatar URL (compress file if custom photo chosen)
       let initialAvatarUrl = customPhotoPreview || selectedAvatarUrl;
       if (customPhotoFile) {
@@ -292,7 +294,7 @@ export const AuthPage: React.FC = () => {
             ministry: selectedMinistry,
             agency: selectedAgency,
             department: department || 'Administration',
-            cadre: selectedCadre,
+            cadre: finalCadre,
             avatar_url: initialAvatarUrl
           }
         }
@@ -346,7 +348,7 @@ export const AuthPage: React.FC = () => {
           ministry: selectedMinistry,
           agency: fullOrgName,
           department: department || 'Administration',
-          cadre: selectedCadre,
+          cadre: finalCadre,
           avatar_url: finalAvatarUrl
         });
       } catch (profileError) {
@@ -367,7 +369,7 @@ export const AuthPage: React.FC = () => {
       // If Supabase auto-confirmed or session is present, log in immediately
       if (data.session) {
         setCompetitionMode('intra_dept');
-        loginWithDomain(email, name, fullOrgName, selectedCadre, department || 'Administration', finalAvatarUrl, user.id);
+        loginWithDomain(email, name, fullOrgName, finalCadre, department || 'Administration', finalAvatarUrl, user.id);
         return;
       }
 
