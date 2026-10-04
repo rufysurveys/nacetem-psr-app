@@ -45,7 +45,7 @@ export interface GameRecord {
   id: string;
   host_id: string | null;
   title: string;
-  competition_mode: 'intra_dept' | 'inter_agency';
+  competition_mode: 'inter_team' | 'intra_dept' | 'inter_agency';
   target_org: string;
   start_datetime: string;
   cutoff_datetime: string;

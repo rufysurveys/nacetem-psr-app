@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useStore } from '../store/useStore';
+import { useStore, ExtendedCompMode } from '../store/useStore';
 import { supabase, cloudDatabaseService, GameRecord } from '../services/supabase';
 import { rememberTournamentLink } from '../services/roomLinks';
 import { DGWelcomeBanner } from '../components/DGWelcomeBanner';
@@ -18,9 +18,9 @@ export const ScheduleTournamentPage: React.FC = () => {
   const [audienceValue, setAudienceValue] = useState(user?.mdaName || '');
   const [audienceAgency, setAudienceAgency] = useState(user?.mdaName || '');
   const [audienceDepartment, setAudienceDepartment] = useState(user?.department || '');
-  const [groupCompetition, setGroupCompetition] = useState(false);
-  const [groupCategorySet, setGroupCategorySet] = useState('PSR Core');
-  const [groupLabelsText, setGroupLabelsText] = useState('North, South');
+  const [groupCompetition, setGroupCompetition] = useState(true);
+  const [groupCategorySet, setGroupCategorySet] = useState('PSR Innovation Teams');
+  const [groupLabelsText, setGroupLabelsText] = useState('Innovators, Inventors, Diffusers');
   const invitationAttempted = useRef(false);
   const localDate = (date: Date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
@@ -28,11 +28,11 @@ export const ScheduleTournamentPage: React.FC = () => {
     fetchCloudGames();
   }, [fetchCloudGames]);
 
-  const [title, setTitle] = useState('2026 PSR Inter-Agency Championship');
-  const [competitionMode, setCompMode] = useState<'intra_dept' | 'inter_agency'>('intra_dept');
-  const [targetOrg, setTargetOrg] = useState('National Centre for Technology Management (NACETEM)');
+  const [title, setTitle] = useState('2026 PSR Inter-Team Innovation Championship');
+  const [competitionMode, setCompMode] = useState<ExtendedCompMode>('inter_team');
+  const [targetOrg, setTargetOrg] = useState('NACETEM Innovation Teams');
   const [startDateTime, setStartDateTime] = useState(() => localDate(new Date(Date.now() + 3600000)));
-  const [description, setDescription] = useState('Official competition testing Public Service Rules mastery across federal agencies.');
+  const [description, setDescription] = useState('Official Inter-Team competition automatically grouping participants into Innovators, Inventors, and Diffusers.');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleCreateSchedule = async (e: React.FormEvent) => {
@@ -187,11 +187,20 @@ export const ScheduleTournamentPage: React.FC = () => {
                   <label className="block font-bold text-slate-700">Competition mode
                     <select
                       value={competitionMode}
-                      onChange={(e) => setCompMode(e.target.value as 'intra_dept' | 'inter_agency')}
+                      onChange={(e) => {
+                        const nextMode = e.target.value as ExtendedCompMode;
+                        setCompMode(nextMode);
+                        if (nextMode === 'inter_team') {
+                          setGroupCompetition(true);
+                          setGroupCategorySet('PSR Innovation Teams');
+                          setGroupLabelsText('Innovators, Inventors, Diffusers');
+                        }
+                      }}
                       className="mt-1 w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 font-medium"
                     >
-                      <option value="intra_dept">Inter-Departmental</option>
-                      <option value="inter_agency">Inter-Agency</option>
+                      <option value="inter_team">🚀 Inter-Team (Innovators, Inventors, Diffusers)</option>
+                      <option value="intra_dept">🏢 Inter-Departmental</option>
+                      <option value="inter_agency">🌐 Inter-Agency</option>
                     </select>
                   </label>
                   <label className="block font-bold text-slate-700">Target organization
@@ -329,7 +338,11 @@ export const ScheduleTournamentPage: React.FC = () => {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      {g.competition_mode === 'inter_agency' ? 'National Inter-Agency' : 'Inter-Departmental'}
+                      {g.competition_mode === 'inter_team'
+                        ? '🚀 Inter-Team'
+                        : g.competition_mode === 'inter_agency'
+                        ? 'National Inter-Agency'
+                        : 'Inter-Departmental'}
                     </span>
                     <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
                       <Users className="w-3.5 h-3.5 text-emerald-600" />

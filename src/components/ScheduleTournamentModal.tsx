@@ -17,7 +17,7 @@ export const ScheduleTournamentModal: React.FC<Props> = ({ isOpen, onClose }) =>
 
   const [title, setTitle] = useState('');
   const [isProctored, setIsProctored] = useState(false);
-  const [competitionMode, setCompMode] = useState<ExtendedCompMode>('intra_dept');
+  const [competitionMode, setCompMode] = useState<ExtendedCompMode>('inter_team');
   
   const [selectedMinistry, setSelectedMinistry] = useState(
     'Federal Ministry of Innovation, Science and Technology'
@@ -51,7 +51,8 @@ export const ScheduleTournamentModal: React.FC<Props> = ({ isOpen, onClose }) =>
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const targetOrg = selectedAgency && selectedAgency !== `${selectedMinistry} Headquarters` ? selectedAgency : selectedMinistry;
-    const tournTitle = title || `${targetOrg} Championship`;
+    const isTeamMode = competitionMode === 'inter_team';
+    const tournTitle = title || (isTeamMode ? '2026 PSR Inter-Team Innovation Championship' : `${targetOrg} Championship`);
 
     try {
       if (!user?.id) {
@@ -64,13 +65,18 @@ export const ScheduleTournamentModal: React.FC<Props> = ({ isOpen, onClose }) =>
         host_id: user.id,
         is_proctored: isProctored,
         title: tournTitle,
-        competition_mode: competitionMode === 'inter_agency' ? 'inter_agency' : 'intra_dept',
-        target_org: targetOrg,
+        competition_mode: competitionMode,
+        target_org: isTeamMode ? 'NACETEM Innovation Teams' : targetOrg,
         start_datetime: `${startDate}T09:00:00Z`,
         cutoff_datetime: `${startDate}T09:00:00Z`,
         max_players: 200,
         status: 'scheduled',
-        description: `Official competition hosted by ${user.name}`
+        description: isTeamMode
+          ? `Inter-Team Championship automatically assigning participants into Innovators, Inventors & Diffusers (Hosted by ${user.name})`
+          : `Official competition hosted by ${user.name}`,
+        group_competition: isTeamMode,
+        group_category_set: isTeamMode ? 'PSR Innovation Teams' : undefined,
+        group_labels: isTeamMode ? ['Innovators', 'Inventors', 'Diffusers'] : undefined
       });
 
       // 2. Refresh central dbGames from Supabase
@@ -112,7 +118,20 @@ export const ScheduleTournamentModal: React.FC<Props> = ({ isOpen, onClose }) =>
           {/* Competition Mode Select */}
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">Select League Type</label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setCompMode('inter_team')}
+                className={`p-2.5 rounded-2xl border text-left transition-all ${
+                  competitionMode === 'inter_team'
+                    ? 'bg-emerald-50 border-emerald-500 text-emerald-900 font-bold shadow-sm ring-2 ring-emerald-500/20'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
+                }`}
+              >
+                <span className="block text-[11px] font-bold text-emerald-800">🚀 Inter-Team (Default)</span>
+                <span className="text-[9px] text-slate-500 font-normal block mt-0.5">Innovators, Inventors &amp; Diffusers</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setCompMode('intra_dept')}
@@ -122,8 +141,8 @@ export const ScheduleTournamentModal: React.FC<Props> = ({ isOpen, onClose }) =>
                     : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
                 }`}
               >
-                <span className="block text-[11px] font-bold">🏢 Intra-Agency Challenge</span>
-                <span className="text-[9px] text-slate-500 font-normal">Inter-Dept & Peer Matchups</span>
+                <span className="block text-[11px] font-bold">🏢 Inter-Department</span>
+                <span className="text-[9px] text-slate-500 font-normal block mt-0.5">Intra-Agency Matchups</span>
               </button>
 
               <button
@@ -135,8 +154,8 @@ export const ScheduleTournamentModal: React.FC<Props> = ({ isOpen, onClose }) =>
                     : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-slate-300'
                 }`}
               >
-                <span className="block text-[11px] font-bold">🌐 Inter-Agency Championship</span>
-                <span className="text-[9px] text-slate-500 font-normal">National All-Agencies</span>
+                <span className="block text-[11px] font-bold">🌐 Inter-Agency</span>
+                <span className="text-[9px] text-slate-500 font-normal block mt-0.5">National All-Agencies</span>
               </button>
             </div>
           </div>

@@ -5,7 +5,7 @@ import { INITIAL_USER, INITIAL_QUESTIONS, INITIAL_TOURNAMENTS, INITIAL_LEADERBOA
 import { cloudDatabaseService, GameRecord, supabase } from '../services/supabase';
 
 export type ActivePage = 'schedule' | 'remotematch' | 'quiz' | 'knockout' | 'sjt' | 'practice' | 'leaderboard' | 'profile' | 'admin';
-export type ExtendedCompMode = 'intra_dept' | 'inter_agency';
+export type ExtendedCompMode = 'inter_team' | 'intra_dept' | 'inter_agency';
 
 export interface ScheduledTournamentItem {
   id: string;
@@ -89,7 +89,7 @@ export const useStore = create<AppState>((set, get) => ({
   isAdminMode: false,
   setIsAdminMode: (isAdmin) => set({ isAdminMode: isAdmin }),
 
-  competitionMode: 'intra_dept',
+  competitionMode: 'inter_team',
   setCompetitionMode: (mode) => set({ competitionMode: mode }),
 
   // Central Database Games State
