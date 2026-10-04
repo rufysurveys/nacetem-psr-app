@@ -42,23 +42,35 @@ export const LeaderboardPage: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fadeIn">
       
-      {/* Competition Mode Switcher (2 Clean Modes) */}
+      {/* Competition Mode Switcher (3 Modes: Inter-Team Default) */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-slate-200 p-4 rounded-3xl shadow-sm">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-2xl bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
-            {competitionMode === 'inter_agency' ? <Globe className="w-5 h-5" /> : <Building2 className="w-5 h-5" />}
+            {competitionMode === 'inter_team' ? <Users className="w-5 h-5" /> : competitionMode === 'inter_agency' ? <Globe className="w-5 h-5" /> : <Building2 className="w-5 h-5" />}
           </div>
           <div>
             <h2 className="text-sm font-extrabold text-slate-900">
-              {competitionMode === 'intra_dept' ? `${user?.mdaName} Intra-Agency Championship` : 'National Inter-Agency Standings'}
+              {competitionMode === 'inter_team' ? '🚀 PSR Inter-Team Championship' : competitionMode === 'intra_dept' ? `${user?.mdaName} Intra-Agency Championship` : 'National Inter-Agency Standings'}
             </h2>
             <p className="text-xs text-slate-500">
-              {competitionMode === 'intra_dept' ? `Departmental & Officer battle inside ${user?.mdaName}` : 'Nationwide standings ranking all organizations'}
+              {competitionMode === 'inter_team' ? 'Equitable team battle: Innovators vs. Inventors vs. Diffusers' : competitionMode === 'intra_dept' ? `Departmental & Officer battle inside ${user?.mdaName}` : 'Nationwide standings ranking all organizations'}
             </p>
           </div>
         </div>
 
         <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold w-full sm:w-auto">
+          <button
+            onClick={() => setCompetitionMode('inter_team')}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl transition-all ${
+              competitionMode === 'inter_team'
+                ? 'bg-emerald-600 text-white font-extrabold shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Inter-Team</span>
+          </button>
+
           <button
             onClick={() => setCompetitionMode('intra_dept')}
             className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl transition-all ${
@@ -68,7 +80,7 @@ export const LeaderboardPage: React.FC = () => {
             }`}
           >
             <Building2 className="w-4 h-4" />
-            <span>Intra-Agency Challenge</span>
+            <span>Intra-Agency</span>
           </button>
 
           <button
@@ -91,12 +103,14 @@ export const LeaderboardPage: React.FC = () => {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-emerald-200 text-xs font-bold mb-2">
             <Trophy className="w-3.5 h-3.5" />
             <span>
-              {competitionMode === 'intra_dept' ? `${user?.mdaName} Intra-Agency Championship` : 'National Civil Service Championship'}
+              {competitionMode === 'inter_team' ? '🚀 PSR Inter-Team Innovation Standings' : competitionMode === 'intra_dept' ? `${user?.mdaName} Intra-Agency Championship` : 'National Civil Service Championship'}
             </span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold">Competitive Leaderboards</h1>
           <p className="text-xs text-emerald-100 mt-1 max-w-xl">
-            {competitionMode === 'intra_dept'
+            {competitionMode === 'inter_team'
+              ? 'Real-time standings for Innovators, Inventors, and Diffusers teams'
+              : competitionMode === 'intra_dept'
               ? `Compare total aggregate XP earned by internal departments inside ${user?.mdaName}`
               : `Compete for the Winner Badge and climb your organization's rankings`
             }
@@ -205,6 +219,54 @@ export const LeaderboardPage: React.FC = () => {
                 </div>
               );
             })}
+          </div>
+        </div>
+      ) : competitionMode === 'inter_team' ? (
+        /* INTER-TEAM INNOVATION TEAMS STANDINGS (Innovators, Inventors, Diffusers) */
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+              <Users className="w-5 h-5 text-emerald-600" />
+              <span>PSR Innovation Teams Battle Table (Innovators, Inventors, Diffusers)</span>
+            </h2>
+            <span className="text-xs text-slate-500 font-medium">Equitably assigned participants</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              { name: 'Innovators', rank: 1, color: 'bg-emerald-600', badge: 'bg-amber-100 text-amber-900 border-amber-300', members: 42, score: 28450, acc: 94 },
+              { name: 'Inventors', rank: 2, color: 'bg-blue-600', badge: 'bg-blue-50 text-blue-800 border-blue-200', members: 40, score: 26120, acc: 91 },
+              { name: 'Diffusers', rank: 3, color: 'bg-purple-600', badge: 'bg-purple-50 text-purple-800 border-purple-200', members: 41, score: 24890, acc: 89 },
+            ].map((team) => (
+              <div key={team.name} className="bright-card p-6 rounded-3xl space-y-4 relative overflow-hidden border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <span className={`text-xs font-extrabold px-3 py-1 rounded-lg border ${team.badge}`}>
+                    TEAM RANK #{team.rank}
+                  </span>
+                  <span className="text-xs text-slate-500 font-bold">{team.members} Members</span>
+                </div>
+
+                <div>
+                  <h3 className="text-xl font-black text-slate-900">🚀 {team.name}</h3>
+                  <p className="text-xs text-slate-500">Equitable PSR Innovation Group</p>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-2 text-center gap-2">
+                  <div>
+                    <span className="block text-xl font-black text-emerald-700">{team.acc}%</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Avg Accuracy</span>
+                  </div>
+                  <div>
+                    <span className="block text-xl font-black text-slate-900">{team.score.toLocaleString()}</span>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase">Total Team XP</span>
+                  </div>
+                </div>
+
+                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                  <div className={`${team.color} h-full rounded-full`} style={{ width: `${team.acc}%` }} />
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       ) : competitionMode === 'intra_dept' && activeTab === 'department' ? (

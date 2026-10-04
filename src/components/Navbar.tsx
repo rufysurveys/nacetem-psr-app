@@ -1,6 +1,6 @@
 import React from 'react';
 import { useStore, ActivePage } from '../store/useStore';
-import { Shield, Trophy, BookOpen, BarChart3, LogOut, CheckCircle2, ShieldAlert, Zap, Building2, Globe, Calendar, RefreshCw } from 'lucide-react';
+import { Shield, Trophy, BookOpen, BarChart3, LogOut, CheckCircle2, ShieldAlert, Zap, Building2, Globe, Calendar, RefreshCw, Users } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { activePage, setActivePage, user, logout, competitionMode, setCompetitionMode } = useStore();
@@ -47,8 +47,20 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
 
-        {/* Competition Mode Switcher Toggle (Clean 2 Modes) */}
+        {/* Competition Mode Switcher Toggle (3 Modes) */}
         <div className="hidden lg:flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+          <button
+            onClick={() => setCompetitionMode('inter_team')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-lg transition-all ${
+              competitionMode === 'inter_team'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5" />
+            <span>Inter-Team</span>
+          </button>
+
           <button
             onClick={() => setCompetitionMode('intra_dept')}
             className={`flex items-center gap-1.5 px-3 py-1 rounded-lg transition-all ${
@@ -58,7 +70,7 @@ export const Navbar: React.FC = () => {
             }`}
           >
             <Building2 className="w-3.5 h-3.5" />
-            <span>Intra-Agency (Inter-Dept)</span>
+            <span>Intra-Agency</span>
           </button>
 
           <button

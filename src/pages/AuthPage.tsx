@@ -368,7 +368,7 @@ export const AuthPage: React.FC = () => {
 
       // If Supabase auto-confirmed or session is present, log in immediately
       if (data.session) {
-        setCompetitionMode('intra_dept');
+        setCompetitionMode('inter_team');
         loginWithDomain(email, name, fullOrgName, finalCadre, department || 'Administration', finalAvatarUrl, user.id);
         return;
       }
@@ -463,7 +463,7 @@ export const AuthPage: React.FC = () => {
           }
         }
 
-        setCompetitionMode('intra_dept');
+        setCompetitionMode('inter_team');
         loginWithDomain(user.email || signInEmail, finalName, finalMda, finalCadre, finalDept, finalAvatar, user.id);
       }
     } catch (err: any) {
@@ -474,7 +474,7 @@ export const AuthPage: React.FC = () => {
   };
 
   const handleDemoSignIn = () => {
-    setCompetitionMode('intra_dept');
+    setCompetitionMode('inter_team');
     loginWithDomain(
       'rufai.abubakar@nacetem.gov.ng', 
       'Abubakar Rufai', 
