@@ -2,11 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { compressImageFile } from '../utils/imageCompressor';
 
 // Both deployment and local development must explicitly use the same backend.
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  throw new Error('Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to the shared Supabase project before building.');
-}
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://ksothbeqmxguyxygfzeu.supabase.co';
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imtzb3RoYmVxbXhndXl4eWdmemV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODk2NTQ0NTMsImV4cCI6MjEwNTIzMDQ1M30.l_1-5oXTboiOYvyVIcBrMMr_ASdApSnUAqsP-LUs2Kc';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
