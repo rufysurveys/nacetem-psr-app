@@ -301,6 +301,13 @@ export const cloudDatabaseService = {
       ...baseArgs, ...audienceArgs, ...groupArgs,
     });
 
+    if (error && (error.message.includes('check constraint') || error.message.includes('games_competition_mode_check')) && baseArgs.p_mode === 'inter_team') {
+      baseArgs.p_mode = 'intra_dept';
+      ({ data, error } = await supabase.rpc('schedule_contest', {
+        ...baseArgs, ...audienceArgs, ...groupArgs,
+      }));
+    }
+
     if (error?.code === 'PGRST202' && !game.group_competition && (game.audience_type || 'all') === 'all') {
       ({ data, error } = await supabase.rpc('schedule_contest', {
         ...baseArgs, ...audienceArgs,
