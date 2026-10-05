@@ -124,32 +124,50 @@ export const PracticeMode: React.FC = () => {
               })}
             </div>
 
-            {showCitation && (
-              <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-3 animate-fadeIn">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-emerald-800 flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5 text-emerald-600" /> Citation: {currentQ.psrCitation.ruleNumber}
-                  </span>
-                  <span className="text-[11px] text-emerald-700 font-semibold">{currentQ.psrCitation.sectionTitle}</span>
+            {showCitation && (() => {
+              const isUserCorrect = selectedOpt === currentQ.correctAnswer;
+              const rawText = currentQ.psrCitation.excerpt || currentQ.explanation;
+              const cleanText = rawText.replace(/^(Correct|Wrong Answer|Wrong)[\.,\s]+/i, '').trim();
+              const formattedExcerpt = isUserCorrect ? `Correct. ${cleanText}` : `Wrong Answer. ${cleanText}`;
+              const cleanExplanation = (currentQ.explanation || '').replace(/^(Correct|Wrong Answer|Wrong)[\.,\s]+/i, '').trim();
+
+              return (
+                <div className={`p-5 rounded-2xl border space-y-3 animate-fadeIn ${
+                  isUserCorrect ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs font-extrabold flex items-center gap-1 ${
+                      isUserCorrect ? 'text-emerald-800' : 'text-rose-800'
+                    }`}>
+                      <Sparkles className={`w-3.5 h-3.5 ${isUserCorrect ? 'text-emerald-600' : 'text-rose-600'}`} /> Citation: {currentQ.psrCitation.ruleNumber}
+                    </span>
+                    <span className={`text-[11px] font-semibold ${
+                      isUserCorrect ? 'text-emerald-700' : 'text-rose-700'
+                    }`}>{currentQ.psrCitation.sectionTitle}</span>
+                  </div>
+
+                  <p className={`text-xs italic bg-white p-3 rounded-xl border ${
+                    isUserCorrect ? 'text-slate-800 border-emerald-200' : 'text-rose-950 border-rose-200 font-medium'
+                  }`}>
+                    "{formattedExcerpt}"
+                  </p>
+
+                  <p className="text-xs text-slate-700">
+                    <strong className={isUserCorrect ? 'text-emerald-800' : 'text-rose-900'}>Explanation:</strong> {cleanExplanation}
+                  </p>
+
+                  <button
+                    onClick={handleNext}
+                    className={`w-full text-white font-bold py-3 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mt-2 ${
+                      isUserCorrect ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-rose-600 hover:bg-rose-700'
+                    }`}
+                  >
+                    <span>{currentIdx + 1 < filteredQuestions.length ? 'Next Practice Card' : 'Restart Chapter Drilling'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
-
-                <p className="text-xs text-slate-800 italic bg-white p-3 rounded-xl border border-emerald-200">
-                  "{currentQ.psrCitation.excerpt}"
-                </p>
-
-                <p className="text-xs text-slate-700">
-                  <strong className="text-emerald-800">Explanation:</strong> {currentQ.explanation}
-                </p>
-
-                <button
-                  onClick={handleNext}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-sm transition-all shadow-md flex items-center justify-center gap-2 mt-2"
-                >
-                  <span>{currentIdx + 1 < filteredQuestions.length ? 'Next Practice Card' : 'Restart Chapter Drilling'}</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              </div>
-            )}
+              );
+            })()}
           </div>
         </div>
 
