@@ -38,7 +38,7 @@ export const Navbar: React.FC = () => {
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-lg text-slate-900 tracking-tight">NACETEM <span className="text-emerald-600">Gamification App</span></span>
+              <span className="font-extrabold text-lg text-slate-900 tracking-tight">NACETEM <span className="text-emerald-600">PSR Quest</span></span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
                 Official PSR 958
               </span>

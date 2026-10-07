@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-const sourceIcon = 'C:/Users/NACETEM060/.gemini/antigravity/brain/0fb7df47-6809-40ac-97e4-cbb8fba6c652/app_icon_emblem_1791379357281.jpg';
+const sourceIcon = 'C:/Users/NACETEM060/.gemini/antigravity/brain/0fb7df47-6809-40ac-97e4-cbb8fba6c652/nacetem_psr_quest_icon_1791389911196.jpg';
 const rootDir = 'C:/Users/NACETEM060/.gemini/antigravity/scratch/psr-gamification-app';
 
 const androidMipmapDirs = [
