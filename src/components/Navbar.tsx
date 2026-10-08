@@ -31,10 +31,8 @@ export const Navbar: React.FC = () => {
           onClick={() => setActivePage('schedule')}
           className="flex items-center gap-2.5 cursor-pointer group"
         >
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 p-0.5 shadow-md group-hover:scale-105 transition-transform">
-            <div className="w-full h-full bg-white rounded-[10px] flex items-center justify-center">
-              <Shield className="w-6 h-6 text-emerald-600" />
-            </div>
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 p-0.5 shadow-md group-hover:scale-105 transition-transform overflow-hidden">
+            <img src="/icon.png" alt="NACETEM PSR Championship Logo" className="w-full h-full object-cover rounded-[10px]" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
