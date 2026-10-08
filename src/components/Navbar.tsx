@@ -31,17 +31,17 @@ export const Navbar: React.FC = () => {
           onClick={() => setActivePage('schedule')}
           className="flex items-center gap-2.5 cursor-pointer group"
         >
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 p-0.5 shadow-md group-hover:scale-105 transition-transform overflow-hidden">
+          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-600 via-teal-600 to-amber-500 p-0.5 shadow-lg group-hover:scale-105 transition-transform overflow-hidden ring-2 ring-emerald-500/20">
             <img src="/icon.png" alt="NACETEM PSR Championship Logo" className="w-full h-full object-cover rounded-[10px]" />
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-lg text-slate-900 tracking-tight">NACETEM <span className="text-emerald-600">PSR Quest</span></span>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <span className="font-black text-xl text-slate-900 tracking-tight">NACETEM <span className="text-emerald-600">PSR Quest</span></span>
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-sm">
                 Official PSR 958
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 font-medium">Public Service Rules Championship</p>
+            <p className="text-[11px] text-slate-600 font-bold tracking-wide">Public Service Rules Championship</p>
           </div>
         </div>
 
