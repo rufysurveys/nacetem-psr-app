@@ -189,7 +189,7 @@ export const App: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Shield className="w-4 h-4 text-emerald-600" />
-            <span className="font-bold text-slate-900">NACETEM Gamification App</span>
+            <span className="font-bold text-slate-900">PSR Quest</span>
             <span>— Public Service Rules (PSR) Gamification Platform</span>
           </div>
 

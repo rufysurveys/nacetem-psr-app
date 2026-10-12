@@ -1,9 +1,57 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useStore, ExtendedCompMode } from '../store/useStore';
 import { supabase, cloudDatabaseService, GameRecord } from '../services/supabase';
 import { rememberTournamentLink } from '../services/roomLinks';
 import { DGWelcomeBanner } from '../components/DGWelcomeBanner';
-import { Calendar, Clock, Trophy, Users, CheckCircle2, Plus, Building2, Sparkles, RefreshCw, AlertCircle, X } from 'lucide-react';
+import { Calendar, Clock, Users, Plus, Building2, RefreshCw, AlertCircle, X, Search, LayoutGrid, List, ShieldCheck, ShieldOff, ArrowRight, BarChart3, Crown, Globe } from 'lucide-react';
+
+type StatusFilter = 'all' | 'upcoming' | 'live' | 'completed';
+type TypeFilter = 'all' | 'proctored' | 'standard';
+type ViewMode = 'grid' | 'list';
+
+const statusGroup = (status: GameRecord['status']): Exclude<StatusFilter, 'all'> =>
+  status === 'active' ? 'live' : status === 'completed' || status === 'cancelled' ? 'completed' : 'upcoming';
+
+const modeLabel = (mode: string) =>
+  mode === 'inter_team' ? 'Inter-Team' : mode === 'inter_agency' ? 'Inter-Agency' : 'Inter-Departmental';
+
+const audienceLabel = (g: GameRecord) =>
+  g.audience_type === 'agency' ? g.audience_value
+    : g.audience_type === 'department' ? `${g.audience_value}, ${g.audience_agency}`
+    : g.audience_type === 'person' ? 'Invited person'
+    : 'Everyone';
+
+const formatStart = (iso: string) =>
+  new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+const VIEW_KEY = 'psr_schedule_view';
+
+const StatusBadge: React.FC<{ status: GameRecord['status'] }> = ({ status }) => {
+  const group = statusGroup(status);
+  if (group === 'live') {
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-rose-50 text-rose-700 border border-rose-200">
+        <span className="relative flex w-2 h-2">
+          <span className="absolute inline-flex w-full h-full rounded-full bg-rose-500 opacity-75 animate-ping" />
+          <span className="relative inline-flex w-2 h-2 rounded-full bg-rose-500" />
+        </span>
+        Live now
+      </span>
+    );
+  }
+  if (group === 'completed') {
+    return (
+      <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-slate-100 text-slate-600 border border-slate-200">
+        {status === 'cancelled' ? 'Cancelled' : 'Completed'}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-emerald-50 text-emerald-700 border border-emerald-200">
+      {status === 'full' ? 'Full' : status === 'open' ? 'Open' : 'Scheduled'}
+    </span>
+  );
+};
 
 export const ScheduleTournamentPage: React.FC = () => {
   const { user, setActivePage, setSelectedOpponent, dbGames, isLoadingGames, gamesError, fetchCloudGames } = useStore();
@@ -22,6 +70,17 @@ export const ScheduleTournamentPage: React.FC = () => {
   const [groupCategorySet, setGroupCategorySet] = useState('PSR Innovation Teams');
   const [groupLabelsText, setGroupLabelsText] = useState('Innovators, Inventors, Diffusers');
   const invitationAttempted = useRef(false);
+
+  // Toolbar state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    try { return localStorage.getItem(VIEW_KEY) === 'list' ? 'list' : 'grid'; } catch (e) { return 'grid'; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(VIEW_KEY, viewMode); } catch (e) {}
+  }, [viewMode]);
   const localDate = (date: Date) => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
   useEffect(() => {
@@ -100,46 +159,135 @@ export const ScheduleTournamentPage: React.FC = () => {
     }
   }, [user?.id]);
 
+  const statusCounts = useMemo(() => {
+    const counts = { all: dbGames.length, upcoming: 0, live: 0, completed: 0 };
+    dbGames.forEach(g => { counts[statusGroup(g.status)] += 1; });
+    return counts;
+  }, [dbGames]);
+
+  const visibleGames = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return dbGames.filter(g => {
+      if (statusFilter !== 'all' && statusGroup(g.status) !== statusFilter) return false;
+      if (typeFilter === 'proctored' && !g.is_proctored) return false;
+      if (typeFilter === 'standard' && g.is_proctored) return false;
+      if (!q) return true;
+      return [g.title, g.target_org, g.audience_value, g.audience_agency]
+        .some(field => (field || '').toLowerCase().includes(q));
+    });
+  }, [dbGames, searchQuery, statusFilter, typeFilter]);
+
+  const openScheduleForm = () => {
+    setIsProctored(false);
+    setScheduleError(null);
+    setIsModalOpen(true);
+  };
+
+  const ctaFor = (g: GameRecord) => {
+    const isHost = g.host_id !== null && user?.id === g.host_id;
+    const completed = statusGroup(g.status) === 'completed';
+    const label = joiningId === g.id
+      ? 'Joining...'
+      : completed ? 'View Match Results' : isHost ? 'Enter Host Lobby' : 'Join Match / Enter Lobby';
+    return { isHost, completed, label };
+  };
+
+  const statusTabs: { id: StatusFilter; label: string }[] = [
+    { id: 'all', label: 'All' },
+    { id: 'upcoming', label: 'Upcoming' },
+    { id: 'live', label: 'Live' },
+    { id: 'completed', label: 'Completed' },
+  ];
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fadeIn">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 animate-fadeIn">
       <DGWelcomeBanner />
       
-      {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gradient-to-r from-emerald-800 via-emerald-900 to-teal-950 p-6 sm:p-8 rounded-3xl text-white shadow-xl">
+      {/* Page header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
-          <div className="flex flex-wrap items-center gap-2 mb-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-bold">
-              <Calendar className="w-3.5 h-3.5" />
-              <span>TOURNAMENT SCHEDULING HUB</span>
-            </div>
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[11px] font-bold">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-              <span>{gamesError ? 'Cloud connection needs attention' : isLoadingGames ? 'Syncing tournaments...' : 'Shared tournament directory'}</span>
-            </div>
-            <button
-              onClick={fetchCloudGames}
-              title="Refresh Remote Schedules"
-              className="p-1 rounded-full bg-white/10 hover:bg-white/20 text-emerald-300 transition-all flex items-center justify-center"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingGames ? 'animate-spin' : ''}`} />
-            </button>
-          </div>
-
-          <h1 className="text-3xl sm:text-4xl font-extrabold">Scheduled Competitions</h1>
-          <p className="text-xs text-emerald-100 mt-1 max-w-2xl">
-            Schedule future Inter-Agency &amp; Inter-Departmental competitions. Created games synchronize across devices for all officers.
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Scheduled Competitions</h1>
+          <p className="text-sm text-slate-500 mt-1 max-w-2xl">
+            Inter-Agency &amp; Inter-Departmental competitions, shared across every officer's device.
           </p>
         </div>
-
-        <div className="flex flex-wrap gap-2 self-start md:self-auto">
+        <div className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+          <span className={`w-2 h-2 rounded-full ${gamesError ? 'bg-rose-500' : isLoadingGames ? 'bg-amber-400 animate-pulse' : 'bg-emerald-500'}`} />
+          <span>{gamesError ? 'Connection needs attention' : isLoadingGames ? 'Syncing tournaments...' : 'Synced'}</span>
           <button
-            onClick={() => { setIsProctored(false); setScheduleError(null); setIsModalOpen(true); }}
-            className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold px-5 py-3 rounded-xl text-xs flex items-center gap-2 shadow-lg transition-all"
+            onClick={fetchCloudGames}
+            title="Refresh schedules"
+            aria-label="Refresh schedules"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-700 hover:bg-emerald-50 transition-all"
           >
-            <Plus className="w-4 h-4 stroke-[3]" />
-            <span>Schedule Tournament</span>
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingGames ? 'animate-spin' : ''}`} />
           </button>
-          <button onClick={() => { setIsProctored(true); setScheduleError(null); setIsModalOpen(true); }} className="bg-white text-emerald-950 font-extrabold px-4 py-3 rounded-xl text-xs shadow-lg">Proctored</button>
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-sm space-y-3">
+        <div className="flex flex-col lg:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search tournaments by name or agency..."
+              aria-label="Search tournaments"
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-9 pr-3 py-2.5 text-sm text-slate-900 focus:outline-none focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20"
+            />
+          </div>
+          <div className="flex gap-2">
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
+              aria-label="Tournament type"
+              className="flex-1 lg:flex-initial bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 focus:outline-none focus:border-emerald-600 cursor-pointer"
+            >
+              <option value="all">All types</option>
+              <option value="proctored">Proctored</option>
+              <option value="standard">Standard</option>
+            </select>
+            <button
+              onClick={openScheduleForm}
+              className="flex-1 lg:flex-initial inline-flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2.5 rounded-xl text-sm shadow-md shadow-emerald-600/20 hover:-translate-y-0.5 active:translate-y-0 transition-all whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4 stroke-[3]" /> Schedule Tournament
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-start justify-between gap-3">
+          <div role="tablist" aria-label="Tournament status" className="flex flex-wrap gap-1">
+            {statusTabs.map(tab => (
+              <button
+                key={tab.id}
+                role="tab"
+                aria-selected={statusFilter === tab.id}
+                onClick={() => setStatusFilter(tab.id)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold whitespace-nowrap transition-all ${
+                  statusFilter === tab.id ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                {tab.id === 'live' && statusCounts.live > 0 && <span className={`w-1.5 h-1.5 rounded-full ${statusFilter === 'live' ? 'bg-white' : 'bg-rose-500'}`} />}
+                {tab.label}
+                <span className={`text-[10px] px-1.5 rounded-md ${statusFilter === tab.id ? 'bg-white/20' : 'bg-slate-100 text-slate-500'}`}>{statusCounts[tab.id]}</span>
+              </button>
+            ))}
+          </div>
+
+          <div role="radiogroup" aria-label="Layout" className="flex shrink-0 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+            <button role="radio" aria-checked={viewMode === 'grid'} aria-label="Card grid" title="Card grid" onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button role="radio" aria-checked={viewMode === 'list'} aria-label="Table list" title="Table list" onClick={() => setViewMode('list')}
+              className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
+              <List className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -173,6 +321,13 @@ export const ScheduleTournamentPage: React.FC = () => {
                     <span>{scheduleError}</span>
                   </div>
                 )}
+                <label className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 p-3 cursor-pointer">
+                  <span>
+                    <span className="block font-bold text-slate-800">Proctored match</span>
+                    <span className="block text-[11px] text-slate-500">Camera and screen monitoring for participants</span>
+                  </span>
+                  <input type="checkbox" checked={isProctored} onChange={e => setIsProctored(e.target.checked)} className="w-4 h-4 accent-emerald-600" />
+                </label>
                 <p className="bg-emerald-50 rounded-xl p-3">{isProctored ? 'Proctored five-round match. Participants consent to camera and full-screen sharing, fullscreen checks, face monitoring, and reviewable flags.' : 'Five timed rounds with a shared rules wheel, lifelines, scenario decisions, and a virtual jackpot. No camera or screen monitoring.'}</p>
                 <div className="grid grid-cols-[1fr_2fr] gap-3">
                   <label className="block font-bold text-slate-700">Players
@@ -310,7 +465,7 @@ export const ScheduleTournamentPage: React.FC = () => {
         </div>
       )}
 
-      {/* GAMES GRID */}
+      {/* GAMES */}
       {isLoadingGames && dbGames.length === 0 ? (
         <div className="py-12 text-center text-slate-500 flex flex-col items-center gap-2">
           <RefreshCw className="w-6 h-6 animate-spin text-emerald-600" />
@@ -320,95 +475,139 @@ export const ScheduleTournamentPage: React.FC = () => {
         <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 space-y-4 shadow-sm">
           <Calendar className="w-12 h-12 text-slate-300 mx-auto" />
           <h3 className="text-lg font-bold text-slate-800">No Scheduled Tournaments Yet</h3>
-          <p className="text-xs text-slate-500 max-w-md mx-auto">
-            Click "Schedule New Tournament" above to create the first competition.
-          </p>
+          <p className="text-sm text-slate-500 max-w-md mx-auto">Create the first competition for your colleagues.</p>
+          <button onClick={openScheduleForm} className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2.5 rounded-xl text-sm shadow-md">
+            <Plus className="w-4 h-4 stroke-[3]" /> Schedule Tournament
+          </button>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {dbGames.map((g) => {
+      ) : visibleGames.length === 0 ? (
+        <div className="bg-white rounded-3xl p-10 text-center border border-slate-200 shadow-sm">
+          <Search className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+          <h3 className="font-bold text-slate-800">No tournaments match these filters</h3>
+          <button
+            onClick={() => { setSearchQuery(''); setStatusFilter('all'); setTypeFilter('all'); }}
+            className="mt-3 text-sm font-bold text-emerald-700 hover:text-emerald-900"
+          >
+            Clear filters
+          </button>
+        </div>
+      ) : viewMode === 'grid' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {visibleGames.map((g) => {
+            const { isHost, completed, label } = ctaFor(g);
             const isAdminNoHost = g.host_id === null;
-            const isHost = !isAdminNoHost && user?.id === g.host_id;
-
             return (
-              <div
-                key={g.id}
-                className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 border border-emerald-200">
-                      {g.competition_mode === 'inter_team'
-                        ? '🚀 Inter-Team'
-                        : g.competition_mode === 'inter_agency'
-                        ? 'National Inter-Agency'
-                        : 'Inter-Departmental'}
-                    </span>
-                    <span className="text-[11px] font-bold text-slate-500 flex items-center gap-1">
-                      <Users className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Max {g.max_players} Players</span>
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-extrabold text-slate-900">{g.title}</h3>
-                    {isAdminNoHost ? (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-300 flex items-center gap-1">
-                        🌐 Admin Scheduled (No Host)
-                      </span>
-                    ) : isHost ? (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1">
-                        👑 Host
-                      </span>
-                    ) : (
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 flex items-center gap-1">
-                        ⚔️ Open Challenge
-                      </span>
-                    )}
-                  </div>
-
-                  <p className="text-xs font-bold text-emerald-700">{g.is_proctored ? 'Proctored tournament · Camera and screen required' : 'Standard tournament · No proctoring'}</p>
-                  <p className="text-xs font-semibold text-slate-600">Audience: {g.audience_type === 'agency' ? g.audience_value : g.audience_type === 'department' ? `${g.audience_value}, ${g.audience_agency}` : g.audience_type === 'person' ? 'Invited person' : 'Everyone'}</p>
-                  <p className="text-xs text-slate-600 leading-relaxed">{g.description || 'Public Service Rules Competition'}</p>
-
-                  <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 space-y-1.5 text-xs">
-                    <div className="flex items-center justify-between text-slate-700 font-medium">
-                      <span className="flex items-center gap-1 text-slate-500">
-                        <Clock className="w-3.5 h-3.5 text-amber-500" /> Start Date:
-                      </span>
-                      <strong className="text-slate-900">{new Date(g.start_datetime).toLocaleString()}</strong>
-                    </div>
-                    <div className="flex items-center justify-between text-slate-700 font-medium">
-                      <span className="flex items-center gap-1 text-slate-500">
-                        <Building2 className="w-3.5 h-3.5 text-emerald-600" /> Target Org:
-                      </span>
-                      <strong className="text-slate-900 truncate max-w-[200px]">{g.target_org}</strong>
-                    </div>
-                  </div>
+              <div key={g.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all flex flex-col gap-4">
+                <div className="flex items-center justify-between gap-2">
+                  <StatusBadge status={g.status} />
+                  <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500">
+                    {isHost ? <><Crown className="w-3.5 h-3.5 text-amber-500" /> You're hosting</>
+                      : isAdminNoHost ? <><Globe className="w-3.5 h-3.5 text-blue-500" /> Admin scheduled</>
+                      : modeLabel(g.competition_mode)}
+                  </span>
                 </div>
 
-                <div className="pt-4 border-t border-slate-100 flex items-center justify-between gap-4">
-                  <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
-                    <Sparkles className="w-3.5 h-3.5" /> Status: {g.status.toUpperCase()}
+                <div>
+                  <h3 className="text-lg font-extrabold text-slate-900 leading-snug">{g.title}</h3>
+                  {(isHost || isAdminNoHost) && <p className="text-xs font-semibold text-emerald-700 mt-0.5">{modeLabel(g.competition_mode)}</p>}
+                  {g.description && <p className="text-xs text-slate-500 leading-relaxed mt-1.5 line-clamp-2">{g.description}</p>}
+                </div>
+
+                <dl className="grid grid-cols-2 gap-px bg-slate-100 rounded-xl overflow-hidden border border-slate-100 text-xs">
+                  <div className="bg-slate-50 p-3">
+                    <dt className="flex items-center gap-1 text-slate-500 font-semibold"><Clock className="w-3.5 h-3.5 text-amber-500" /> Start</dt>
+                    <dd className="mt-1 font-bold text-slate-900">{formatStart(g.start_datetime)}</dd>
+                  </div>
+                  <div className="bg-slate-50 p-3 min-w-0">
+                    <dt className="flex items-center gap-1 text-slate-500 font-semibold"><Building2 className="w-3.5 h-3.5 text-emerald-600" /> Target Org</dt>
+                    <dd className="mt-1 font-bold text-slate-900 truncate" title={g.target_org}>{g.target_org}</dd>
+                  </div>
+                  <div className="bg-slate-50 p-3">
+                    <dt className="flex items-center gap-1 text-slate-500 font-semibold"><Users className="w-3.5 h-3.5 text-emerald-600" /> Max Players</dt>
+                    <dd className="mt-1 font-bold text-slate-900">{g.max_players}</dd>
+                  </div>
+                  <div className="bg-slate-50 p-3">
+                    <dt className="flex items-center gap-1 text-slate-500 font-semibold">
+                      {g.is_proctored ? <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> : <ShieldOff className="w-3.5 h-3.5 text-slate-400" />} Proctoring
+                    </dt>
+                    <dd className="mt-1 font-bold text-slate-900">{g.is_proctored ? 'Camera & screen' : 'None'}</dd>
+                  </div>
+                </dl>
+
+                <div className="mt-auto flex items-center justify-between gap-3 pt-1">
+                  <span className="text-[11px] text-slate-500 truncate" title={`Audience: ${audienceLabel(g)}`}>
+                    Audience: <strong className="text-slate-700">{audienceLabel(g)}</strong>
                   </span>
                   <button
                     onClick={() => handleJoinGame(g)}
                     disabled={joiningId !== null}
-                    className={`font-extrabold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-sm transition-all ${
-                      isHost
-                        ? 'bg-amber-500 hover:bg-amber-600 text-slate-950'
-                        : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                    className={`shrink-0 inline-flex items-center gap-1.5 font-bold px-4 py-2.5 rounded-xl text-xs transition-all disabled:opacity-60 ${
+                      completed
+                        ? 'border border-slate-300 text-slate-700 bg-white hover:border-emerald-500 hover:text-emerald-800'
+                        : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 hover:-translate-y-0.5'
                     }`}
                   >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>
-                      {joiningId === g.id ? 'Joining...' : g.status === 'completed' ? 'View match results' : isHost ? 'Enter host lobby' : 'Join match / Enter lobby'}
-                    </span>
+                    {completed ? <BarChart3 className="w-4 h-4" /> : isHost ? <Crown className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
+                    {label}
                   </button>
                 </div>
               </div>
             );
           })}
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-3">Tournament</th>
+                  <th className="px-4 py-3">Status</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Start</th>
+                  <th className="px-4 py-3">Target Org</th>
+                  <th className="px-4 py-3 text-right">Players</th>
+                  <th className="px-4 py-3">Proctoring</th>
+                  <th className="px-4 py-3"><span className="sr-only">Action</span></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {visibleGames.map((g) => {
+                  const { isHost, completed } = ctaFor(g);
+                  return (
+                    <tr key={g.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-4 py-3 min-w-[14rem]">
+                        <span className="block font-bold text-slate-900">{g.title}</span>
+                        <span className="text-xs text-slate-500">{modeLabel(g.competition_mode)}{isHost ? ' · You\'re hosting' : ''}</span>
+                      </td>
+                      <td className="px-4 py-3"><StatusBadge status={g.status} /></td>
+                      <td className="px-4 py-3 text-xs text-slate-700 whitespace-nowrap">{formatStart(g.start_datetime)}</td>
+                      <td className="px-4 py-3 text-xs text-slate-700 max-w-[12rem] truncate" title={g.target_org}>{g.target_org}</td>
+                      <td className="px-4 py-3 text-xs text-slate-700 text-right">{g.max_players}</td>
+                      <td className="px-4 py-3 text-xs">
+                        {g.is_proctored
+                          ? <span className="inline-flex items-center gap-1 font-semibold text-emerald-700"><ShieldCheck className="w-3.5 h-3.5" /> Proctored</span>
+                          : <span className="text-slate-500">Standard</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          onClick={() => handleJoinGame(g)}
+                          disabled={joiningId !== null}
+                          className={`inline-flex items-center gap-1 font-bold px-3 py-1.5 rounded-lg text-xs whitespace-nowrap transition-all disabled:opacity-60 ${
+                            completed
+                              ? 'border border-slate-300 text-slate-700 bg-white hover:border-emerald-500 hover:text-emerald-800'
+                              : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          }`}
+                        >
+                          {completed ? 'View Results' : isHost ? 'Host Lobby' : 'Join'}
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

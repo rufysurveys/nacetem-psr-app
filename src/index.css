@@ -2,6 +2,157 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------- Auth page: liquid glass + intro animation ---------- */
+.auth-backdrop {
+  background:
+    radial-gradient(circle at 15% 20%, rgba(16, 185, 129, 0.12), transparent 45%),
+    radial-gradient(circle at 85% 80%, rgba(20, 184, 166, 0.12), transparent 45%),
+    #f8fafc;
+}
+
+.liquid-glass-card {
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 30px 60px -20px rgba(6, 78, 59, 0.35),
+    0 0 0 1px rgba(15, 23, 42, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  transition: box-shadow 0.4s ease, transform 0.4s ease;
+}
+.liquid-glass-card:hover {
+  box-shadow:
+    0 40px 80px -24px rgba(6, 78, 59, 0.45),
+    0 0 0 1px rgba(15, 23, 42, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.liquid-glass-panel {
+  background: linear-gradient(
+    to bottom,
+    rgba(6, 78, 59, 0.96) 0%,
+    rgba(4, 120, 87, 0.9) 35%,
+    rgba(167, 243, 208, 0.82) 72%,
+    rgba(240, 253, 244, 0.9) 100%
+  );
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 1px 0 0 rgba(255, 255, 255, 0.15),
+    inset -1px 0 0 rgba(255, 255, 255, 0.4);
+}
+/* Specular highlights that give the glass its "liquid" sheen */
+.liquid-glass-panel::before {
+  content: "";
+  position: absolute;
+  inset: -20% -40% auto auto;
+  width: 80%;
+  height: 50%;
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.22), transparent 65%);
+  pointer-events: none;
+}
+.liquid-glass-panel::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.12) 50%, transparent 60%);
+  pointer-events: none;
+}
+
+/* Self-hosted (SIL Open Font License) so the title never flashes a fallback */
+@font-face {
+  font-family: "Playfair Display";
+  src: url("/fonts/PlayfairDisplay-ExtraBold.woff2") format("woff2");
+  font-weight: 800;
+  font-style: normal;
+  font-display: block;
+}
+
+/* Bondist (licensed) — drop the file into public/fonts/; until then the
+   title falls back to Playfair Display. */
+@font-face {
+  font-family: "Bondist";
+  src: url("/fonts/Bondist.woff2") format("woff2"),
+       url("/fonts/Bondist.otf") format("opentype"),
+       url("/fonts/Bondist.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+
+.font-title {
+  font-family: "Bondist", "Playfair Display", Georgia, serif;
+}
+
+/* Handwriting: draw the outline, then fill it in */
+.psr-write {
+  fill: transparent;
+  stroke: #ffffff;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 400;
+  stroke-dashoffset: 400;
+}
+.psr-write.is-ready {
+  animation:
+    psr-draw 1.6s cubic-bezier(0.55, 0.1, 0.35, 1) forwards,
+    psr-fill 0.6s ease 1.5s forwards;
+}
+@keyframes psr-draw {
+  to { stroke-dashoffset: 0; }
+}
+/* Sweeps left-to-right so the letters appear in writing order */
+.psr-reveal-rect {
+  transform: scaleX(0);
+  transform-box: fill-box;
+  transform-origin: left center;
+}
+.psr-reveal-rect.is-ready {
+  animation: psr-reveal 1.6s cubic-bezier(0.45, 0.05, 0.4, 1) forwards;
+}
+@keyframes psr-reveal {
+  to { transform: scaleX(1); }
+}
+@keyframes psr-fill {
+  to { fill: #ffffff; stroke-width: 0.4; }
+}
+
+.auth-fade {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.auth-fade.is-ready {
+  animation: auth-fade-in 0.7s ease forwards;
+}
+.auth-fade-1.is-ready { animation-delay: 1.9s; }
+.auth-fade-2.is-ready { animation-delay: 2.5s; }
+@keyframes auth-fade-in {
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Floating educational doodles behind the card */
+.auth-float {
+  position: absolute;
+  color: #047857;
+  opacity: 0.32;
+  filter: drop-shadow(0 4px 6px rgba(4, 120, 87, 0.15));
+  animation: auth-float var(--dur, 9s) ease-in-out var(--delay, 0s) infinite alternate;
+}
+@keyframes auth-float {
+  from { transform: translateY(0) rotate(var(--rot, 0deg)); }
+  to   { transform: translateY(-22px) rotate(calc(var(--rot, 0deg) + 8deg)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .psr-write, .psr-write.is-ready { animation: none; fill: #ffffff; stroke-dashoffset: 0; stroke-width: 0.4; }
+  .psr-reveal-rect, .psr-reveal-rect.is-ready { animation: none; transform: none; }
+  .auth-fade, .auth-fade.is-ready { animation: none; opacity: 1; transform: none; }
+  .auth-float { animation: none; }
+}
+
 @layer base {
   body {
     @apply bg-slate-50 text-slate-900 font-sans antialiased selection:bg-emerald-500 selection:text-white;

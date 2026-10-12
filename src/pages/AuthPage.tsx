@@ -6,10 +6,50 @@ import { supabase, cloudDatabaseService } from '../services/supabase';
 import { tournamentLink } from '../services/roomLinks';
 import { compressImageFile } from '../utils/imageCompressor';
 import { CURATED_AVATARS } from '../data/curatedAvatars';
-import { ShieldCheck, Mail, Building2, User, Sparkles, Zap, Users, Globe, Camera, CheckCircle2, RefreshCw, Lock, LogIn, UserPlus, ExternalLink, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { ShieldCheck, Mail, Building2, User, Sparkles, Zap, Users, Globe, Camera, CheckCircle2, RefreshCw, Lock, LogIn, UserPlus, ExternalLink, AlertCircle, Eye, EyeOff, BookOpen, GraduationCap, Lightbulb, Trophy, Pencil, Puzzle, Star, Brain, Calculator, Award, BookMarked, Atom } from 'lucide-react';
+
+// Decorative icons that drift gently in the background around the auth card.
+const FLOATING_DOODLES = [
+  { Icon: BookOpen,      top: '6%',  left: '4%',  size: 56, rot: -12, dur: 9,  delay: 0 },
+  { Icon: GraduationCap, top: '12%', left: '88%', size: 64, rot: 10,  dur: 11, delay: 1.2 },
+  { Icon: Lightbulb,     top: '78%', left: '6%',  size: 48, rot: 8,   dur: 8,  delay: 0.6 },
+  { Icon: Trophy,        top: '84%', left: '90%', size: 52, rot: -8,  dur: 10, delay: 2 },
+  { Icon: Pencil,        top: '45%', left: '2%',  size: 40, rot: 35,  dur: 7,  delay: 1.5, desktopOnly: true },
+  { Icon: Puzzle,        top: '50%', left: '94%', size: 44, rot: -15, dur: 9,  delay: 0.3, desktopOnly: true },
+  { Icon: Star,          top: '3%',  left: '48%', size: 32, rot: 0,   dur: 6,  delay: 0.9 },
+  { Icon: Brain,         top: '92%', left: '45%', size: 44, rot: 6,   dur: 10, delay: 1.8, desktopOnly: true },
+  { Icon: Calculator,    top: '28%', left: '7%',  size: 36, rot: -6,  dur: 8,  delay: 2.4, desktopOnly: true },
+  { Icon: Award,         top: '30%', left: '92%', size: 38, rot: 12,  dur: 9,  delay: 0.4, desktopOnly: true },
+  { Icon: BookMarked,    top: '64%', left: '91%', size: 42, rot: -10, dur: 11, delay: 1, desktopOnly: true },
+  { Icon: Atom,          top: '62%', left: '3%',  size: 46, rot: 15,  dur: 12, delay: 2.8, desktopOnly: true },
+];
 
 export const AuthPage: React.FC = () => {
   const { loginWithDomain, setCompetitionMode } = useStore();
+
+  // Start the intro animation only once the script font has loaded, so the
+  // handwriting is drawn in the right typeface. The Google Fonts stylesheet may
+  // not be parsed yet, in which case load() resolves empty — so retry until the
+  // face is found (gives up after ~2.5s and animates with the fallback).
+  const [introReady, setIntroReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    let timer: number | undefined;
+    // Bondist is preferred; if its file is missing the load rejects and the
+    // Playfair Display fallback is used instead.
+    const loadFace = (family: string) =>
+      document.fonts ? document.fonts.load(`800 64px "${family}"`).catch(() => []) : Promise.resolve([1]);
+    const tryStart = (attempt: number) => {
+      Promise.all([loadFace('Bondist'), loadFace('Playfair Display')]).then(([bondist, playfair]) => {
+        if (cancelled) return;
+        if (bondist.length > 0 || playfair.length > 0 || attempt >= 25) setIntroReady(true);
+        else timer = window.setTimeout(() => tryStart(attempt + 1), 100);
+      });
+    };
+    tryStart(0);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, []);
+  const ready = introReady ? ' is-ready' : '';
 
   // Auth Tab: 'signup' | 'signin' | 'forgot_password' | 'reset_password'
   const [authTab, setAuthTab] = useState<'signup' | 'signin' | 'forgot_password' | 'reset_password'>('signup');
@@ -41,6 +81,9 @@ export const AuthPage: React.FC = () => {
   const [selectedAgency, setSelectedAgency] = useState<string>(
     'National Centre for Technology Management (NACETEM)'
   );
+  // "Others" option: selectedAgency then holds whatever the officer types
+  const [isOtherAgency, setIsOtherAgency] = useState(false);
+  const [customAgencyInput, setCustomAgencyInput] = useState('');
   const [department, setDepartment] = useState('');
   const [selectedCadreOption, setSelectedCadreOption] = useState<string>('Assistant Director (GL 15)');
   const [customCadreInput, setCustomCadreInput] = useState<string>('');
@@ -71,6 +114,8 @@ export const AuthPage: React.FC = () => {
 
   const handleMinistryChange = (ministryName: string) => {
     setSelectedMinistry(ministryName);
+    // Keep a typed-in organisation when the ministry changes
+    if (isOtherAgency) return;
     const minObj = FEDERAL_MINISTRIES_AND_AGENCIES.find(m => m.ministry === ministryName);
     if (minObj && minObj.agencies.length > 0) {
       setSelectedAgency(minObj.agencies[0]);
@@ -487,55 +532,94 @@ export const AuthPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 sm:p-6 lg:p-8 font-sans">
-      <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-12 bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden">
-        
-        {/* Left Branding Banner */}
-        <div className="md:col-span-5 bg-gradient-to-br from-emerald-700 via-emerald-800 to-teal-900 p-8 text-white flex flex-col justify-between relative overflow-hidden">
-          <div className="space-y-6 relative z-10">
-            <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-emerald-300 shadow-inner">
+    <div className="auth-backdrop min-h-screen flex items-center justify-center p-4 sm:p-6 lg:p-8 font-sans relative overflow-hidden">
+
+      {/* Floating educational doodles */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        {FLOATING_DOODLES.map(({ Icon, top, left, size, rot, dur, delay, desktopOnly }, i) => (
+          <Icon
+            key={i}
+            className={`auth-float ${desktopOnly ? 'hidden lg:block' : ''}`}
+            style={{ top, left, width: size, height: size, '--rot': `${rot}deg`, '--dur': `${dur}s`, '--delay': `${delay}s` } as React.CSSProperties}
+            strokeWidth={1.5}
+          />
+        ))}
+      </div>
+
+      <div className="liquid-glass-card w-full max-w-5xl md:min-h-[680px] grid grid-cols-1 md:grid-cols-12 rounded-3xl overflow-hidden relative z-10">
+
+        {/* Left Branding Banner — liquid glass, deep green fading to near-white */}
+        <div className="liquid-glass-panel md:col-span-5 p-6 sm:p-8 text-white flex flex-col relative overflow-hidden">
+          <div className="space-y-5 relative z-10">
+            <div className={`auth-fade auth-fade-2${ready} w-12 h-12 rounded-2xl bg-white/15 border border-white/30 backdrop-blur-md flex items-center justify-center text-emerald-200 shadow-lg shadow-emerald-950/30 transition-transform duration-300 hover:scale-110 hover:rotate-6`}>
               <ShieldCheck className="w-7 h-7" />
             </div>
 
             <div>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-400/30 text-emerald-300 text-xs font-bold mb-3">
+              <div className={`auth-fade auth-fade-2${ready} inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/50 border border-emerald-300/30 backdrop-blur-md text-emerald-200 text-xs font-bold mb-2`}>
                 <Sparkles className="w-3.5 h-3.5" /> Federal Civil Service Auth Portal
               </div>
-              <h1 className="text-3xl font-extrabold tracking-tight">NACETEM Gamification App</h1>
-              <p className="text-sm text-emerald-100 mt-2 leading-relaxed">
-                Public Service Rules (PSR) Federal Ministries &amp; Agencies Multi-Device Engine.
+              <h1 className="sr-only">PSR QUEST</h1>
+              <svg viewBox="0 0 420 84" className="w-full max-w-[22rem] h-auto drop-shadow-[0_4px_12px_rgba(2,44,34,0.45)]" aria-hidden="true">
+                <defs>
+                  <clipPath id="psr-reveal">
+                    <rect className={`psr-reveal-rect${ready}`} x="0" y="0" width="420" height="84" />
+                  </clipPath>
+                </defs>
+                <text
+                  clipPath="url(#psr-reveal)"
+                  x="4"
+                  y="66"
+                  textLength="410"
+                  lengthAdjust="spacing"
+                  className={`psr-write font-title${ready}`}
+                  style={{ fontSize: 66, fontWeight: 800 }}
+                >
+                  PSR QUEST
+                </text>
+              </svg>
+              <p className={`auth-fade auth-fade-1${ready} text-xs font-semibold uppercase tracking-[0.3em] text-emerald-200 -mt-1`}>
+                powered by NACETEM
               </p>
-            </div>
-
-            <div className="space-y-3 pt-4 border-t border-emerald-600/40 text-xs text-emerald-100">
-              <div className="flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-emerald-300 shrink-0" />
-                <span>Realtime Cross-Device Matchmaking</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-emerald-300 shrink-0" />
-                <span>Central Cloud Database</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Globe className="w-4 h-4 text-emerald-300 shrink-0" />
-                <span>Global Multi-Location Competition Engine</span>
-              </div>
             </div>
           </div>
 
-          <div className="pt-6 relative z-10">
+          {/* Pushed down towards the light end of the gradient */}
+          <div className={`auth-fade auth-fade-2${ready} mt-10 md:mt-auto md:pt-16 space-y-5 relative z-10`}>
+            {/* Intro copy only on the sign-up tab, not for existing officers */}
+            {authTab === 'signup' && (
+              <>
+                <p className="text-sm text-emerald-950 font-medium leading-relaxed">
+                  Public Service Rules (PSR) Federal Ministries &amp; Agencies Multi-Device Engine.
+                </p>
+
+                <div className="space-y-2 pt-4 border-t border-emerald-900/15 text-xs text-emerald-900">
+                  {[
+                    { Icon: Building2, label: 'Realtime Cross-Device Matchmaking' },
+                    { Icon: Users, label: 'Central Cloud Database' },
+                    { Icon: Globe, label: 'Global Multi-Location Competition Engine' },
+                  ].map(({ Icon, label }) => (
+                    <div key={label} className="flex items-center gap-2 -mx-2 px-2 py-1.5 rounded-lg transition-all duration-200 hover:bg-white/40 hover:translate-x-1">
+                      <Icon className="w-4 h-4 text-emerald-700 shrink-0" />
+                      <span>{label}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
             <button
               onClick={handleDemoSignIn}
-              className="w-full bg-white/15 hover:bg-white/25 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all border border-white/20 flex items-center justify-center gap-2"
+              className="w-full bg-white/50 hover:bg-white/80 backdrop-blur-md text-emerald-900 font-bold py-2.5 px-4 rounded-xl text-xs transition-all duration-200 border border-white/70 shadow-sm hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2"
             >
-              <Zap className="w-4 h-4 text-emerald-300" />
+              <Zap className="w-4 h-4 text-emerald-600" />
               <span>Practice demo (remote contests require your own account)</span>
             </button>
           </div>
         </div>
 
         {/* Right Form - Global Standard Auth Portal */}
-        <div className="md:col-span-7 p-6 sm:p-8 space-y-6">
+        <div className={`auth-fade auth-fade-2${ready} md:col-span-7 p-6 sm:p-8 bg-white/60 flex flex-col gap-6 [&>*:last-child]:my-auto`}>
           
           {/* TAB HEADERS: SIGN UP vs SIGN IN */}
           <div className="flex bg-slate-100 p-1.5 rounded-2xl text-xs font-bold text-slate-600">
@@ -652,27 +736,27 @@ export const AuthPage: React.FC = () => {
                   </div>
 
                   {/* PROFILE PHOTO & AVATAR SELECTION */}
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-3">
-                    <label className="block text-xs font-bold text-slate-800 flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <Camera className="w-4 h-4 text-emerald-600" />
+                  <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+                    <label className="block text-sm font-bold text-slate-800 flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <Camera className="w-5 h-5 text-emerald-600" />
                         <span>Profile Photo &amp; Illustrated Avatars</span>
                       </span>
                     </label>
 
-                    <div className="flex flex-col sm:flex-row items-center gap-4">
+                    <div className="flex flex-col sm:flex-row items-center gap-5">
                       {/* Active Photo Preview */}
                       <div className="relative shrink-0">
                         <img
                           src={customPhotoPreview || selectedAvatarUrl}
                           alt="Selected Profile"
-                          className="w-16 h-16 rounded-2xl object-cover border-2 border-emerald-500 shadow-md"
+                          className="w-24 h-24 rounded-2xl object-cover border-[3px] border-emerald-500 shadow-lg"
                         />
                       </div>
 
                       <div className="flex-1 space-y-2 text-center sm:text-left w-full">
-                        <label className="inline-flex items-center gap-2 px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl text-xs font-bold cursor-pointer transition-all">
-                          <Camera className="w-3.5 h-3.5 text-emerald-600" />
+                        <label className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 hover:shadow-md text-emerald-800 border border-emerald-300 rounded-xl text-sm font-bold cursor-pointer transition-all">
+                          <Camera className="w-4 h-4 text-emerald-600" />
                           <span>Upload Photo from Computer</span>
                           <input
                             type="file"
@@ -681,14 +765,14 @@ export const AuthPage: React.FC = () => {
                             className="hidden"
                           />
                         </label>
-                        <p className="text-[10px] text-slate-400">Photos save to Supabase Storage bucket.</p>
+                        <p className="text-xs text-slate-400">Photos save to Supabase Storage bucket.</p>
                       </div>
                     </div>
 
                     {/* Curated Avatars */}
-                    <div className="pt-2 border-t border-slate-200">
-                      <span className="block text-[11px] font-semibold text-slate-600 mb-2">Choose an Avatar :</span>
-                      <div className="grid grid-cols-6 gap-2">
+                    <div className="pt-3 border-t border-slate-200">
+                      <span className="block text-xs font-semibold text-slate-600 mb-3">Choose an Avatar :</span>
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
                         {CURATED_AVATARS.map((av) => (
                           <button
                             key={av.id}
@@ -703,10 +787,10 @@ export const AuthPage: React.FC = () => {
                             className={`relative rounded-xl overflow-hidden border-2 transition-all p-0.5 ${
                               selectedAvatarUrl === av.url && !customPhotoPreview
                                 ? 'border-emerald-600 ring-2 ring-emerald-500/30 scale-105'
-                                : 'border-slate-200 hover:border-slate-400'
+                                : 'border-slate-200 hover:border-slate-400 hover:-translate-y-0.5 hover:shadow-md'
                             }`}
                           >
-                            <img src={av.url} alt="" className="w-full h-10 object-cover rounded-lg" />
+                            <img src={av.url} alt="" className="w-full aspect-square object-cover rounded-lg" />
                           </button>
                         ))}
                       </div>
@@ -731,14 +815,42 @@ export const AuthPage: React.FC = () => {
                     <div>
                       <label className="block text-xs font-semibold text-slate-700 mb-1">Assigned Agency / Bureau</label>
                       <select
-                        value={selectedAgency}
-                        onChange={(e) => setSelectedAgency(e.target.value)}
+                        value={isOtherAgency ? 'OTHER' : selectedAgency}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === 'OTHER') {
+                            setIsOtherAgency(true);
+                            setSelectedAgency(customAgencyInput.trim());
+                          } else {
+                            setIsOtherAgency(false);
+                            setSelectedAgency(val);
+                          }
+                        }}
                         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
                       >
                         {availableAgencies.map(ag => (
                           <option key={ag} value={ag}>{ag}</option>
                         ))}
+                        <option value="OTHER">✍️ Others / Type your organization...</option>
                       </select>
+
+                      {isOtherAgency && (
+                        <div className="mt-2 animate-fadeIn">
+                          <input
+                            type="text"
+                            required
+                            autoFocus
+                            value={customAgencyInput}
+                            onChange={(e) => {
+                              const typed = e.target.value;
+                              setCustomAgencyInput(typed);
+                              setSelectedAgency(typed.trim());
+                            }}
+                            placeholder="Type your organization (e.g. National Bureau of Statistics)"
+                            className="w-full bg-emerald-50/60 border border-emerald-300 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-emerald-600 font-medium"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
 
