@@ -24,7 +24,7 @@ export interface RoomState {
 export async function contestRpc<T>(name: string, args: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.rpc(name, args).abortSignal(AbortSignal.timeout(15000));
   if (error) {
-    if (error.code === 'PGRST202') throw new Error('Remote contests need the database update. Ask the administrator to apply migration 004_remote_contests.sql.');
+    if (error.code === 'PGRST202') throw new Error(`The database is missing an update for "${name}". Ask the administrator to apply the latest migrations in supabase/migrations.`);
     throw new Error(error.message);
   }
   return data as T;

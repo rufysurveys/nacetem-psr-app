@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
-import { Trophy, Building2, CheckCircle2, Filter, Globe, Users } from 'lucide-react';
+import { Trophy, Building2, CheckCircle2, Filter, Globe, Users, ArrowRight } from 'lucide-react';
 
 export const LeaderboardPage: React.FC = () => {
-  const { leaderboard, mdas, competitionMode, setCompetitionMode, user } = useStore();
+  const { leaderboard, mdas, competitionMode, user } = useStore();
 
-  const [activeTab, setActiveTab] = useState<'individual' | 'department'>('individual');
+  // 'department' = group standings (teams / departments / agencies), 'individual' = officers table
+  const [activeTab, setActiveTab] = useState<'individual' | 'department'>('department');
   const [filterCadre, setFilterCadre] = useState<string>('All');
 
   // Filter individual officer rankings based on Competition Mode
@@ -39,137 +40,79 @@ export const LeaderboardPage: React.FC = () => {
   departmentStandings.sort((a, b) => b.totalXP - a.totalXP);
   departmentStandings.forEach((d, idx) => d.rank = idx + 1);
 
+  const viewTabs: { id: 'department' | 'individual'; label: string; icon: React.ReactNode }[] = [
+    {
+      id: 'department',
+      label: competitionMode === 'inter_team' ? 'Team Standings' : competitionMode === 'inter_agency' ? 'Inter-Agency Rankings' : 'Inter-Departmental Rankings',
+      icon: competitionMode === 'inter_team' ? <Trophy className="w-4 h-4" /> : competitionMode === 'inter_agency' ? <Globe className="w-4 h-4" /> : <Building2 className="w-4 h-4" />,
+    },
+    {
+      id: 'individual',
+      label: competitionMode === 'intra_dept' ? 'Internal Officers' : 'All Officers',
+      icon: <Users className="w-4 h-4" />,
+    },
+  ];
+
+  const teams = [
+    { name: 'Innovators', rank: 1, medal: '🥇', accent: 'bg-emerald-500', rankBadge: 'bg-emerald-50 text-emerald-800 border-emerald-200', link: 'text-emerald-700 hover:text-emerald-900', members: 42, score: 28450, acc: 94 },
+    { name: 'Inventors', rank: 2, medal: '🥈', accent: 'bg-blue-500', rankBadge: 'bg-blue-50 text-blue-800 border-blue-200', link: 'text-blue-700 hover:text-blue-900', members: 40, score: 26120, acc: 91 },
+    { name: 'Diffusers', rank: 3, medal: '🥉', accent: 'bg-purple-500', rankBadge: 'bg-purple-50 text-purple-800 border-purple-200', link: 'text-purple-700 hover:text-purple-900', members: 41, score: 24890, acc: 89 },
+  ];
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fadeIn">
       
-      {/* Competition Mode Switcher (3 Modes: Inter-Team Default) */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-white border border-slate-200 p-4 rounded-3xl shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-2xl bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
-            {competitionMode === 'inter_team' ? <Users className="w-5 h-5" /> : competitionMode === 'inter_agency' ? <Globe className="w-5 h-5" /> : <Building2 className="w-5 h-5" />}
-          </div>
-          <div>
-            <h2 className="text-sm font-extrabold text-slate-900">
-              {competitionMode === 'inter_team' ? '🚀 PSR Inter-Team Championship' : competitionMode === 'intra_dept' ? `${user?.mdaName} Intra-Agency Championship` : 'National Inter-Agency Standings'}
-            </h2>
-            <p className="text-xs text-slate-500">
-              {competitionMode === 'inter_team' ? 'Equitable team battle: Innovators vs. Inventors vs. Diffusers' : competitionMode === 'intra_dept' ? `Departmental & Officer battle inside ${user?.mdaName}` : 'Nationwide standings ranking all organizations'}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex bg-slate-100 p-1 rounded-2xl border border-slate-200 text-xs font-bold w-full sm:w-auto">
-          <button
-            onClick={() => setCompetitionMode('inter_team')}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl transition-all ${
-              competitionMode === 'inter_team'
-                ? 'bg-emerald-600 text-white font-extrabold shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Users className="w-4 h-4" />
-            <span>Inter-Team</span>
-          </button>
-
-          <button
-            onClick={() => setCompetitionMode('intra_dept')}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl transition-all ${
-              competitionMode === 'intra_dept'
-                ? 'bg-emerald-600 text-white font-extrabold shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Building2 className="w-4 h-4" />
-            <span>Intra-Agency</span>
-          </button>
-
-          <button
-            onClick={() => setCompetitionMode('inter_agency')}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl transition-all ${
-              competitionMode === 'inter_agency'
-                ? 'bg-emerald-600 text-white font-extrabold shadow-sm'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Globe className="w-4 h-4" />
-            <span>Inter-Agency</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-gradient-to-r from-emerald-700 via-emerald-800 to-teal-900 p-6 sm:p-8 rounded-3xl text-white shadow-xl">
-        <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-emerald-200 text-xs font-bold mb-2">
-            <Trophy className="w-3.5 h-3.5" />
+      {/* Hero Banner — scope is chosen in the header's global "Scope" toggle */}
+      <div className="relative overflow-hidden bg-gradient-to-r from-emerald-700 via-emerald-800 to-teal-900 p-6 sm:p-8 rounded-3xl text-white shadow-xl">
+        <div className="absolute -right-10 -top-10 w-48 h-48 rounded-full bg-white/5" aria-hidden="true" />
+        <div className="absolute right-16 -bottom-16 w-40 h-40 rounded-full bg-white/5" aria-hidden="true" />
+        <div className="relative">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-emerald-100 text-xs font-bold mb-3">
+            {competitionMode === 'inter_team' ? <Users className="w-3.5 h-3.5" /> : competitionMode === 'inter_agency' ? <Globe className="w-3.5 h-3.5" /> : <Building2 className="w-3.5 h-3.5" />}
             <span>
-              {competitionMode === 'inter_team' ? '🚀 PSR Inter-Team Innovation Standings' : competitionMode === 'intra_dept' ? `${user?.mdaName} Intra-Agency Championship` : 'National Civil Service Championship'}
+              {competitionMode === 'inter_team' ? 'PSR Inter-Team Championship' : competitionMode === 'intra_dept' ? `${user?.mdaName} Intra-Agency Championship` : 'National Inter-Agency Standings'}
             </span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold">Competitive Leaderboards</h1>
-          <p className="text-xs text-emerald-100 mt-1 max-w-xl">
+          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight flex items-center gap-3">
+            <Trophy className="w-8 h-8 text-amber-300 shrink-0" />
+            Competitive Leaderboards
+          </h1>
+          <p className="text-sm text-emerald-100 mt-2 max-w-xl">
             {competitionMode === 'inter_team'
-              ? 'Real-time standings for Innovators, Inventors, and Diffusers teams'
+              ? 'Real-time standings for the Innovators, Inventors and Diffusers teams.'
               : competitionMode === 'intra_dept'
-              ? `Compare total aggregate XP earned by internal departments inside ${user?.mdaName}`
-              : `Compete for the Winner Badge and climb your organization's rankings`
+              ? `Compare total XP earned by internal departments inside ${user?.mdaName}.`
+              : 'Nationwide standings ranking all Federal Ministries & Agencies.'
             }
           </p>
         </div>
+      </div>
 
-        {/* Tab selector */}
-        <div className="flex bg-white/15 p-1 rounded-2xl border border-white/20 text-xs font-bold">
-          {competitionMode === 'inter_agency' ? (
-            <>
-              <button
-                onClick={() => setActiveTab('department')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
-                  activeTab === 'department' ? 'bg-white text-emerald-800 font-extrabold shadow' : 'text-emerald-100 hover:text-white'
-                }`}
-              >
-                <Globe className="w-4 h-4" />
-                <span>Inter-Agency Rankings</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('individual')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
-                  activeTab === 'individual' ? 'bg-white text-emerald-800 font-extrabold shadow' : 'text-emerald-100 hover:text-white'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                <span>All Officers</span>
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => setActiveTab('department')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
-                  activeTab === 'department' ? 'bg-white text-emerald-800 font-extrabold shadow' : 'text-emerald-100 hover:text-white'
-                }`}
-              >
-                <Building2 className="w-4 h-4" />
-                <span>Inter-Departmental Rankings</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('individual')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
-                  activeTab === 'individual' ? 'bg-white text-emerald-800 font-extrabold shadow' : 'text-emerald-100 hover:text-white'
-                }`}
-              >
-                <Users className="w-4 h-4" />
-                <span>Internal Officers</span>
-              </button>
-            </>
-          )}
-        </div>
+      {/* View switcher */}
+      <div role="tablist" aria-label="Leaderboard view" className="flex w-full sm:w-fit bg-slate-100 p-1 rounded-2xl border border-slate-200 text-sm font-bold">
+        {viewTabs.map((tab) => (
+          <button
+            key={tab.id}
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl whitespace-nowrap transition-all ${
+              activeTab === tab.id
+                ? 'bg-white text-emerald-800 shadow-sm ring-1 ring-slate-200'
+                : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            {tab.icon}
+            <span>{tab.label}</span>
+          </button>
+        ))}
       </div>
 
       {/* INTER-AGENCY ORGANIZATIONS STANDINGS (For Inter-Agency Mode) */}
       {competitionMode === 'inter_agency' && activeTab === 'department' ? (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-start sm:items-center gap-2 [&>svg]:shrink-0 [&>svg]:mt-1 sm:[&>svg]:mt-0">
               <Globe className="w-5 h-5 text-emerald-600" />
               <span>National Inter-Agency Standings Table</span>
             </h2>
@@ -221,11 +164,11 @@ export const LeaderboardPage: React.FC = () => {
             })}
           </div>
         </div>
-      ) : competitionMode === 'inter_team' ? (
+      ) : competitionMode === 'inter_team' && activeTab === 'department' ? (
         /* INTER-TEAM INNOVATION TEAMS STANDINGS (Innovators, Inventors, Diffusers) */
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-start sm:items-center gap-2 [&>svg]:shrink-0 [&>svg]:mt-1 sm:[&>svg]:mt-0">
               <Users className="w-5 h-5 text-emerald-600" />
               <span>PSR Innovation Teams Battle Table (Innovators, Inventors, Diffusers)</span>
             </h2>
@@ -233,37 +176,44 @@ export const LeaderboardPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              { name: 'Innovators', rank: 1, color: 'bg-emerald-600', badge: 'bg-amber-100 text-amber-900 border-amber-300', members: 42, score: 28450, acc: 94 },
-              { name: 'Inventors', rank: 2, color: 'bg-blue-600', badge: 'bg-blue-50 text-blue-800 border-blue-200', members: 40, score: 26120, acc: 91 },
-              { name: 'Diffusers', rank: 3, color: 'bg-purple-600', badge: 'bg-purple-50 text-purple-800 border-purple-200', members: 41, score: 24890, acc: 89 },
-            ].map((team) => (
-              <div key={team.name} className="bright-card p-6 rounded-3xl space-y-4 relative overflow-hidden border border-slate-200">
-                <div className="flex items-center justify-between">
-                  <span className={`text-xs font-extrabold px-3 py-1 rounded-lg border ${team.badge}`}>
-                    TEAM RANK #{team.rank}
-                  </span>
-                  <span className="text-xs text-slate-500 font-bold">{team.members} Members</span>
-                </div>
+            {teams.map((team) => (
+              <div key={team.name} className="bright-card rounded-3xl overflow-hidden flex flex-col transition-all hover:shadow-lg hover:-translate-y-0.5">
+                <div className={`h-1.5 w-full ${team.accent}`} aria-hidden="true" />
 
-                <div>
-                  <h3 className="text-xl font-black text-slate-900">🚀 {team.name}</h3>
-                  <p className="text-xs text-slate-500">Equitable PSR Innovation Group</p>
-                </div>
-
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 grid grid-cols-2 text-center gap-2">
-                  <div>
-                    <span className="block text-xl font-black text-emerald-700">{team.acc}%</span>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase">Avg Accuracy</span>
+                <div className="p-6 flex flex-col gap-5 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className={`inline-flex items-center gap-1.5 text-[11px] font-extrabold tracking-wide px-2.5 py-1 rounded-lg border ${team.rankBadge}`}>
+                      <span aria-hidden="true">{team.medal}</span> TEAM RANK #{team.rank}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-xs text-slate-500 font-semibold">
+                      <Users className="w-3.5 h-3.5" /> {team.members} Members
+                    </span>
                   </div>
-                  <div>
-                    <span className="block text-xl font-black text-slate-900">{team.score.toLocaleString()}</span>
-                    <span className="text-[10px] font-bold text-slate-500 uppercase">Total Team XP</span>
-                  </div>
-                </div>
 
-                <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                  <div className={`${team.color} h-full rounded-full`} style={{ width: `${team.acc}%` }} />
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900 tracking-tight">{team.name}</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Equitable PSR Innovation Group</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 divide-x divide-slate-200 rounded-2xl bg-slate-50 border border-slate-200 py-4 text-center">
+                    <div className="px-2">
+                      <span className="block text-2xl font-black text-emerald-700 leading-none">{team.acc}%</span>
+                      <span className="block mt-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Avg Accuracy</span>
+                    </div>
+                    <div className="px-2">
+                      <span className="block text-2xl font-black text-slate-900 leading-none">{team.score.toLocaleString()}</span>
+                      <span className="block mt-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Team XP</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('individual')}
+                    className={`mt-auto self-start inline-flex items-center gap-1.5 text-xs font-bold ${team.link} group`}
+                  >
+                    View Officer Rankings
+                    <ArrowRight className="w-3.5 h-3.5 transition-transform group-hover:translate-x-0.5" />
+                  </button>
                 </div>
               </div>
             ))}
@@ -272,8 +222,8 @@ export const LeaderboardPage: React.FC = () => {
       ) : competitionMode === 'intra_dept' && activeTab === 'department' ? (
         /* DEPARTMENTAL BATTLE STANDINGS (For Intra-Org Inter-Dept Mode) */
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-start sm:items-center gap-2 [&>svg]:shrink-0 [&>svg]:mt-1 sm:[&>svg]:mt-0">
               <Building2 className="w-5 h-5 text-emerald-600" />
               <span>{user?.mdaName} Internal Departmental Battle Table</span>
             </h2>

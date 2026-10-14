@@ -1,69 +1,43 @@
 import React, { useState } from 'react';
 import dgPhoto from '../assets/dg_photo.webp';
-import { Sparkles, Trophy, Target, Award, Users, BookOpen, Rocket, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trophy, ChevronDown } from 'lucide-react';
 
 export const DGWelcomeBanner: React.FC = () => {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="bg-gradient-to-br from-emerald-800 via-emerald-900 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-2xl relative overflow-hidden border border-emerald-600/30">
-      
-      {/* Subtle Background Glow */}
-      <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 left-0 w-80 h-80 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="bg-gradient-to-r from-emerald-800 via-emerald-900 to-slate-900 rounded-2xl text-white shadow-lg relative overflow-hidden border border-emerald-600/30">
+      <div className="absolute top-0 right-0 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-      <div className="relative z-10 flex flex-col md:flex-row gap-6 md:gap-8 items-start">
-        
-        {/* DG Portrait Frame */}
-        <div className="shrink-0 flex flex-col items-center space-y-2 self-center md:self-start">
-          <div className="relative group">
-            <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-2xl overflow-hidden ring-4 ring-amber-400/80 shadow-2xl bg-emerald-950">
-              <img 
-                src={dgPhoto} 
-                alt="Director-General / CEO, NACETEM" 
-                className="w-full h-full object-cover object-top group-hover:scale-105 transition-transform duration-300" 
-              />
-            </div>
-            <div className="absolute -bottom-2 inset-x-0 flex justify-center">
-              <span className="bg-amber-500 text-slate-950 font-black text-[10px] tracking-wider uppercase px-3 py-0.5 rounded-full shadow-lg border border-amber-300">
-                DG / CEO Message
-              </span>
-            </div>
+      <div className="relative z-10">
+        {/* Compact announcement bar */}
+        <button
+          type="button"
+          onClick={() => setIsExpanded(!isExpanded)}
+          aria-expanded={isExpanded}
+          aria-controls="dg-message"
+          className="w-full flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-3 text-left hover:bg-white/5 transition-colors"
+        >
+          <img
+            src={dgPhoto}
+            alt="Director-General / CEO, NACETEM"
+            className="w-11 h-11 sm:w-12 sm:h-12 shrink-0 rounded-xl object-cover object-top ring-2 ring-amber-400/80 bg-emerald-950"
+          />
+          <div className="flex-1 min-w-0">
+            <span className="block text-[10px] font-black uppercase tracking-wider text-amber-300">DG / CEO Message</span>
+            <span className="block font-extrabold text-sm sm:text-base text-white truncate">🎮 Welcome to the NACETEM PSR Challenge!</span>
+            <span className="hidden md:block text-xs text-emerald-200 truncate">Learn the Public Service Rules. Play the Challenge. Master the Rules.</span>
           </div>
-          <div className="text-center pt-2">
-            <h4 className="font-extrabold text-sm text-white">Dr. Olushola Odusanya</h4>
-            <p className="text-[11px] text-emerald-200 font-medium">Director-General / CEO, NACETEM</p>
-          </div>
-        </div>
+          <span className="shrink-0 inline-flex items-center gap-1 text-xs font-bold text-emerald-100 bg-white/10 px-3 py-1.5 rounded-xl">
+            <span className="hidden sm:inline">{isExpanded ? 'Hide message' : 'Read message'}</span>
+            <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+          </span>
+        </button>
 
-        {/* DG Welcome Content */}
-        <div className="flex-1 space-y-4">
-          <div className="flex items-center justify-between gap-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/20 border border-amber-400/40 text-amber-300 text-xs font-black">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>OFFICIAL EXECUTIVE WELCOME</span>
-            </div>
-
-            <button
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="text-xs text-emerald-200 hover:text-white flex items-center gap-1 font-bold bg-white/10 px-3 py-1 rounded-xl transition-all"
-            >
-              <span>{isExpanded ? 'Collapse Message' : 'Read Full Message'}</span>
-              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
-          </div>
-
-          <div>
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight text-white flex items-center gap-2">
-              🎮 Welcome to the NACETEM PSR Challenge!
-            </h2>
-            <p className="text-emerald-300 font-extrabold text-sm sm:text-base mt-1">
-              Learn the Public Service Rules. Play the Challenge. Master the Rules.
-            </p>
-          </div>
-
+        <div id="dg-message" className="px-4 sm:px-5">
           {isExpanded && (
-            <div className="space-y-4 pt-2 text-xs sm:text-sm text-emerald-100 leading-relaxed border-t border-emerald-700/50 animate-fadeIn">
+            <div className="space-y-4 py-4 text-xs sm:text-sm text-emerald-100 leading-relaxed border-t border-emerald-700/50 animate-fadeIn">
+              <p className="text-[11px] font-semibold text-emerald-300">Dr. Olushola Odusanya · Director-General / CEO, NACETEM</p>
               <p className="text-slate-100 font-medium">
                 Welcome to the <strong>NACETEM Public Service Rules (PSR) Gamification App</strong> — an interactive platform designed to make learning the Public Service Rules engaging, competitive and rewarding.
               </p>
@@ -110,7 +84,6 @@ export const DGWelcomeBanner: React.FC = () => {
             </div>
           )}
         </div>
-
       </div>
     </div>
   );
